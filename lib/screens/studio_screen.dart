@@ -31,6 +31,18 @@ class StudioScreen extends StatelessWidget {
         title: Text(p.name),
         actions: [
           IconButton(
+            tooltip: 'Export project (.layerstudio)',
+            onPressed: () async {
+              final err = await c.exportProjectBundle();
+              if (context.mounted && err != null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Project export failed: $err')),
+                );
+              }
+            },
+            icon: const Icon(Icons.folder_zip_outlined),
+          ),
+          IconButton(
             tooltip: 'Save',
             onPressed: () async {
               await c.saveNow();

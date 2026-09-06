@@ -37,6 +37,29 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Decode upload keystore (if secret present)
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${ANDROID_KEYSTORE_BASE64:-}" && -n "${ANDROID_KEYSTORE_PASSWORD:-}" && -n "${ANDROID_KEY_ALIAS:-}" && -n "${ANDROID_KEY_PASSWORD:-}" ]]; then
+            echo "Release signing secrets detected — writing keystore + key.properties"
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/upload-keystore.jks
+            {
+              echo "storePassword=${ANDROID_KEYSTORE_PASSWORD}"
+              echo "keyPassword=${ANDROID_KEY_PASSWORD}"
+              echo "keyAlias=${ANDROID_KEY_ALIAS}"
+              echo "storeFile=app/upload-keystore.jks"
+            } > android/key.properties
+            echo "SIGNING_MODE=release" >> "$GITHUB_ENV"
+          else
+            echo "WARNING: ANDROID_KEYSTORE_* secrets not fully set — APK will use debug signing fallback."
+            echo "SIGNING_MODE=debug-fallback" >> "$GITHUB_ENV"
+          fi
+
       - name: Build universal release APK
         run: flutter build apk --release
 
@@ -50,6 +73,7 @@ jobs:
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk dist/LayerStudio-arm64.apk
           cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk dist/LayerStudio-armv7.apk
           ls -lh dist/
+          echo "Signing mode: ${SIGNING_MODE:-unknown}"
 
       - name: Resolve release tag
         id: tag
@@ -60,15 +84,13 @@ jobs:
           if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" == v* ]]; then
             TAG="${GITHUB_REF_NAME}"
           else
-            # Prefer v0.1.1 unless that tag already exists; then bump patch
-            TAG="v0.1.1"
+            TAG="v1.0.1"
             if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" >/dev/null 2>&1; then
-              # Find next free patch under v0.1.x
               n=1
-              while gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/v0.1.${n}" >/dev/null 2>&1; do
+              while gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/v1.0.1-${n}" >/dev/null 2>&1; do
                 n=$((n + 1))
               done
-              TAG="v0.1.${n}"
+              TAG="v1.0.1-${n}"
             fi
           fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
@@ -82,11 +104,18 @@ jobs:
           TAG="${{ steps.tag.outputs.tag }}"
           SHA="${GITHUB_SHA}"
           SHORT_SHA="${SHA:0:7}"
+          SIGNING="${SIGNING_MODE:-unknown}"
+
+          if [[ "$SIGNING" == "release" ]]; then
+            SIGN_NOTE="Release-signed with the upload keystore (sideload / internal distribution — not Play Store published by this workflow)."
+          else
+            SIGN_NOTE="WARNING: Built with **debug signing fallback** (upload keystore secrets were missing)."
+          fi
 
           NOTES="$(cat <<NOTESEOF
           # LayerStudio ${TAG}
 
-          Debug/testing sideload builds (Android debug keystore signing — not Play Store ready).
+          ${SIGN_NOTE}
 
           Built from commit \`${SHORT_SHA}\` (\`${SHA}\`) on branch/ref \`${GITHUB_REF_NAME}\`.
 
@@ -99,12 +128,9 @@ jobs:
           1. Download the APK on your Android phone
           2. Open it and allow install from unknown sources if prompted
           3. Open **LayerStudio**
-
-          Same install steps as v0.1.0.
           NOTESEOF
           )"
 
-          # Dedent: strip leading indentation from heredoc
           NOTES="$(printf '%s\n' "$NOTES" | sed 's/^          //')"
 
           if gh release view "$TAG" >/dev/null 2>&1; then

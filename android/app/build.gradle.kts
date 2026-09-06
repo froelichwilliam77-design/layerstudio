@@ -1,9 +1,35 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+
+fun propOrEnv(propKey: String, envKey: String): String? {
+    val fromFile = keystoreProperties.getProperty(propKey)?.takeIf { it.isNotBlank() }
+    if (fromFile != null) return fromFile
+    return System.getenv(envKey)?.takeIf { it.isNotBlank() }
+}
+
+val uploadStoreFilePath = propOrEnv("storeFile", "ANDROID_KEYSTORE_PATH")
+val uploadStorePassword = propOrEnv("storePassword", "ANDROID_KEYSTORE_PASSWORD")
+val uploadKeyAlias = propOrEnv("keyAlias", "ANDROID_KEY_ALIAS")
+val uploadKeyPassword = propOrEnv("keyPassword", "ANDROID_KEY_PASSWORD")
+
+val hasReleaseSigning =
+    !uploadStoreFilePath.isNullOrBlank() &&
+        !uploadStorePassword.isNullOrBlank() &&
+        !uploadKeyAlias.isNullOrBlank() &&
+        !uploadKeyPassword.isNullOrBlank()
 
 android {
     namespace = "com.layerstudio.layerstudio"
@@ -20,21 +46,40 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.layerstudio.layerstudio"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                val storePath = uploadStoreFilePath!!
+                val store = file(storePath)
+                // Also accept path relative to android/ or android/app/
+                storeFile = when {
+                    store.exists() -> store
+                    rootProject.file(storePath).exists() -> rootProject.file(storePath)
+                    file("upload-keystore.jks").exists() -> file("upload-keystore.jks")
+                    else -> store
+                }
+                storePassword = uploadStorePassword
+                keyAlias = uploadKeyAlias
+                keyPassword = uploadKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (hasReleaseSigning) {
+                signingConfigs.getByName("release")
+            } else {
+                println("WARNING: Release signing secrets/key.properties missing — falling back to debug signing.")
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }

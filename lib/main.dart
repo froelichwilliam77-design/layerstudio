@@ -18,19 +18,46 @@ Future<void> main() async {
   try {
     await controller.bootstrap();
   } catch (e, st) {
-    debugPrint('Bootstrap warning (audio may be unavailable on this host): $e\n$st');
+    debugPrint(
+      'Bootstrap warning (audio may be unavailable on this host): $e\n$st',
+    );
   }
 
   runApp(
     ChangeNotifierProvider.value(
       value: controller,
-      child: const LayerStudioApp(),
+      child: LayerStudioApp(controller: controller),
     ),
   );
 }
 
-class LayerStudioApp extends StatelessWidget {
-  const LayerStudioApp({super.key});
+class LayerStudioApp extends StatefulWidget {
+  const LayerStudioApp({super.key, required this.controller});
+
+  final StudioController controller;
+
+  @override
+  State<LayerStudioApp> createState() => _LayerStudioAppState();
+}
+
+class _LayerStudioAppState extends State<LayerStudioApp>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    widget.controller.onAppLifecycle(state);
+  }
 
   @override
   Widget build(BuildContext context) {

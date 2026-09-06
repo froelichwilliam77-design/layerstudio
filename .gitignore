@@ -54,3 +54,12 @@ app.*.map.json
 
 # Local tooling
 *.zip
+
+# Android signing (never commit)
+key.properties
+**/key.properties
+*.jks
+*.keystore
+android/key.properties
+android/app/upload-keystore.jks
+android/app/*.jks

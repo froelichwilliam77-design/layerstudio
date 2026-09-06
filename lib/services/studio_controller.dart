@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show AppLifecycleState;
 import 'package:uuid/uuid.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -9,9 +11,11 @@ import '../models/fx_settings.dart';
 import '../models/note_event.dart';
 import '../models/project.dart';
 import '../models/track.dart';
+import '../utils/audio_clock_math.dart';
 import '../utils/music_theory.dart';
 import 'audio_engine.dart';
 import 'export_service.dart';
+import 'project_bundle.dart';
 import 'project_store.dart';
 
 enum StudioTab { arrange, drums, piano, keys, guitar, mixer, library }
@@ -20,11 +24,30 @@ class StudioController extends ChangeNotifier {
   StudioController({
     ProjectStore? store,
     ExportService? exporter,
+    ProjectBundleService? bundle,
   })  : _store = store ?? ProjectStore(),
-        _exporter = exporter ?? ExportService();
+        _exporter = exporter ?? ExportService(),
+        _bundle = bundle ?? ProjectBundleService() {
+    final engine = AudioEngine.instance;
+    engine.onInterruption = ({required bool began}) {
+      if (began) {
+        if (isPlaying) {
+          _resumeAfterInterruption = true;
+          pause();
+        }
+      } else if (_resumeAfterInterruption) {
+        _resumeAfterInterruption = false;
+        play();
+      }
+    };
+    engine.onBecomingNoisy = () {
+      if (isPlaying) pause();
+    };
+  }
 
   final ProjectStore _store;
   final ExportService _exporter;
+  final ProjectBundleService _bundle;
   final _uuid = const Uuid();
 
   List<StudioProject> recent = [];
@@ -39,10 +62,17 @@ class StudioController extends ChangeNotifier {
   bool eraseMode = false;
   int snapSteps = 1; // 1 = 16th
 
-  Timer? _clock;
-  DateTime? _playStartedAt;
-  int _playStartedStep = 0;
+  /// Poller only — source of truth is AudioEngine.transportSeconds.
+  Timer? _poller;
   Timer? _autosaveTimer;
+  bool _resumeAfterInterruption = false;
+  bool _resumeAfterLifecycle = false;
+
+  /// Last step index that was scheduled via lookahead (exclusive cursor).
+  int _scheduledThroughStep = -1;
+
+  /// Lookahead window for note oneshots (~40ms).
+  static const double _lookaheadSec = 0.04;
 
   Track? get selectedTrack {
     final p = project;
@@ -336,6 +366,7 @@ class StudioController extends ChangeNotifier {
       path,
       volume: track.volume,
       pan: track.pan,
+      fx: track.fx,
     );
   }
 
@@ -347,6 +378,7 @@ class StudioController extends ChangeNotifier {
       pan: track.pan,
       pitchMidi: midi,
       rootMidi: track.rootMidi,
+      fx: track.fx,
     );
   }
 
@@ -359,43 +391,78 @@ class StudioController extends ChangeNotifier {
     return true;
   }
 
-  // --- Transport ---
+  // --- Transport (audio-clock + lookahead) ---
 
   void play() {
     final p = project;
     if (p == null) return;
     if (isPlaying) return;
     isPlaying = true;
-    _playStartedAt = DateTime.now();
-    _playStartedStep = playheadStep;
+    final engine = AudioEngine.instance;
+    unawaited(engine.activateSession());
+    final origin = AudioClockMath.stepToSeconds(playheadStep, p.bpm);
+    engine.startTransportClock(originSeconds: origin);
+    _scheduledThroughStep = playheadStep - 1;
     WakelockPlus.enable();
-    _applyMasterFx();
-    _clock?.cancel();
-    _clock = Timer.periodic(const Duration(milliseconds: 16), (_) {
-      _onTick();
+    _poller?.cancel();
+    // Poller updates UI + runs lookahead; clock is the source of truth.
+    _poller = Timer.periodic(const Duration(milliseconds: 8), (_) {
+      _onTransportPoll();
     });
+    // Schedule immediately so step 0 notes fire without waiting a poll.
+    _onTransportPoll();
     notifyListeners();
   }
 
   void pause() {
     isPlaying = false;
-    _clock?.cancel();
+    _poller?.cancel();
+    AudioEngine.instance.pauseTransportClock();
     WakelockPlus.disable();
     notifyListeners();
   }
 
   void stop() {
     isPlaying = false;
-    _clock?.cancel();
+    _poller?.cancel();
     playheadStep = project?.loopStartStep ?? 0;
-    // Fire-and-forget stop of active voices
+    _scheduledThroughStep = playheadStep - 1;
+    AudioEngine.instance.stopTransportClock(
+      originSeconds: AudioClockMath.stepToSeconds(
+        playheadStep,
+        project?.bpm ?? 120,
+      ),
+    );
     unawaited(AudioEngine.instance.stopAll());
+    unawaited(AudioEngine.instance.deactivateSession());
     unawaited(WakelockPlus.disable());
     notifyListeners();
   }
 
   void togglePlay() => isPlaying ? pause() : play();
 
+  /// App lifecycle: pause transport when backgrounded; optional resume.
+  void onAppLifecycle(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+        if (isPlaying) {
+          _resumeAfterLifecycle = true;
+          pause();
+        }
+        break;
+      case AppLifecycleState.resumed:
+        if (_resumeAfterLifecycle) {
+          _resumeAfterLifecycle = false;
+          // Do not auto-resume after background — keeps Play honest / OS-safe.
+        }
+        break;
+      case AppLifecycleState.detached:
+        stop();
+        break;
+    }
+  }
 
   void setScaleLock(bool v) {
     scaleLock = v;
@@ -418,43 +485,59 @@ class StudioController extends ChangeNotifier {
   }
 
   void seek(int step) {
+    final p = project;
     playheadStep = step;
-    _playStartedAt = DateTime.now();
-    _playStartedStep = step;
+    _scheduledThroughStep = step - 1;
+    final origin = AudioClockMath.stepToSeconds(step, p?.bpm ?? 120);
+    if (isPlaying) {
+      AudioEngine.instance.seekTransportClock(origin);
+    } else {
+      AudioEngine.instance.stopTransportClock(originSeconds: origin);
+    }
     notifyListeners();
   }
 
-  int _lastFiredStep = -1;
-
-  void _onTick() {
+  void _onTransportPoll() {
     final p = project;
-    final started = _playStartedAt;
-    if (p == null || started == null || !isPlaying) return;
+    if (p == null || !isPlaying) return;
 
-    final elapsed = DateTime.now().difference(started).inMicroseconds / 1e6;
-    final stepsFloat = _playStartedStep + elapsed / p.secondsPerStep;
-    var step = stepsFloat.floor();
+    final engine = AudioEngine.instance;
+    var musical = engine.transportSeconds;
 
-    final loopStart = p.loopStartStep;
-    final loopEnd = mathMax(p.loopEndStep, loopStart + 1);
-
-    if (p.loopEnabled && step >= loopEnd) {
-      final loopLen = loopEnd - loopStart;
-      final into = (step - loopStart) % loopLen;
-      step = loopStart + into;
-      // Reset timing anchor when wrapping
-      _playStartedStep = step;
-      _playStartedAt = DateTime.now();
-      _lastFiredStep = -1;
+    final mapped = AudioClockMath.mapLoop(
+      musicalSeconds: musical,
+      bpm: p.bpm,
+      loopEnabled: p.loopEnabled,
+      loopStartStep: p.loopStartStep,
+      loopEndStep: p.loopEndStep,
+    );
+    if (mapped.didWrap) {
+      engine.seekTransportClock(mapped.wrappedSeconds);
+      musical = mapped.wrappedSeconds;
+      _scheduledThroughStep = mapped.step - 1;
     }
 
+    final step = mapped.step;
     if (step != playheadStep) {
       playheadStep = step;
-      if (step != _lastFiredStep) {
-        _fireStep(step);
-        _lastFiredStep = step;
-      }
       notifyListeners();
+    }
+
+    // Lookahead schedule: fire oneshots for steps entering [now, now+lookahead].
+    final horizonSec = musical + _lookaheadSec;
+    final horizonStep = AudioClockMath.secondsToStep(horizonSec, p.bpm);
+    final steps = AudioClockMath.stepsInLookahead(
+      fromStepExclusive: _scheduledThroughStep,
+      toStepInclusive: horizonStep,
+      loopEnabled: p.loopEnabled,
+      loopStartStep: p.loopStartStep,
+      loopEndStep: p.loopEndStep,
+    );
+    for (final s in steps) {
+      _fireStep(s);
+    }
+    if (horizonStep > _scheduledThroughStep) {
+      _scheduledThroughStep = horizonStep;
     }
   }
 
@@ -468,27 +551,18 @@ class StudioController extends ChangeNotifier {
         final vel = note.velocity / 127.0;
         if (track.category == TrackCategory.drums) {
           final pad = DrumPadMap.padIndexForPitch(note.pitch);
-          triggerPad(track, pad);
+          unawaited(triggerPad(track, pad));
         } else {
-          triggerNote(track, note.pitch, velocity: vel);
+          unawaited(triggerNote(track, note.pitch, velocity: vel));
         }
       }
     }
   }
 
-  void _applyMasterFx() {
-    final tracks = project?.tracks ?? [];
-    if (tracks.isEmpty) return;
-    final avgReverb =
-        tracks.map((t) => t.fx.reverb).fold(0.0, (a, b) => a + b) /
-            tracks.length;
-    final avgDelay =
-        tracks.map((t) => t.fx.delay).fold(0.0, (a, b) => a + b) /
-            tracks.length;
-    AudioEngine.instance.applyGlobalFx(reverb: avgReverb, delay: avgDelay);
+  /// Called when mixer FX change so live inserts stay relevant on next notes.
+  void notifyFxChanged() {
+    notifyListeners();
   }
-
-  int mathMax(int a, int b) => a > b ? a : b;
 
   Future<String?> exportAndShare() async {
     final p = project;
@@ -503,10 +577,36 @@ class StudioController extends ChangeNotifier {
     }
   }
 
+  Future<String?> exportProjectBundle() async {
+    final p = project;
+    if (p == null) return 'No project open';
+    try {
+      await saveNow();
+      await _bundle.shareProject(p);
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  Future<String?> importProjectFile(File file) async {
+    try {
+      stop();
+      final imported = await _bundle.importFromFile(file);
+      await openProject(imported);
+      await refreshRecent();
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
   @override
   void dispose() {
-    _clock?.cancel();
+    _poller?.cancel();
     _autosaveTimer?.cancel();
+    AudioEngine.instance.onInterruption = null;
+    AudioEngine.instance.onBecomingNoisy = null;
     WakelockPlus.disable();
     super.dispose();
   }
