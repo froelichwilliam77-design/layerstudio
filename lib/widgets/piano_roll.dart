@@ -55,12 +55,14 @@ class _PianoRollState extends State<PianoRoll> {
               FilterChip(
                 label: const Text('Scale lock'),
                 selected: c.scaleLock,
+                showCheckmark: false,
                 onSelected: c.setScaleLock,
               ),
               const SizedBox(width: 8),
               FilterChip(
                 label: Text(c.eraseMode ? 'Erase' : 'Draw'),
                 selected: c.eraseMode,
+                showCheckmark: false,
                 onSelected: c.setEraseMode,
               ),
               const Spacer(),
@@ -74,6 +76,7 @@ class _PianoRollState extends State<PianoRoll> {
                   min: 20,
                   max: 127,
                   value: c.drawVelocity.toDouble(),
+                  activeColor: Color(widget.track.colorValue),
                   onChanged: (v) => c.setDrawVelocity(v.round()),
                 ),
               ),

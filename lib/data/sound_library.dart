@@ -35,7 +35,7 @@ class SoundLibrary {
       description: 'Kick, snare, hats & tom for rock grooves.',
       samplePath: 'assets/samples/drums/rock_kick.wav',
       rootMidi: 36,
-      colorValue: 0xFFE57373,
+      colorValue: 0xFFE07A3D,
       drumKit: {
         'Kick': 'assets/samples/drums/rock_kick.wav',
         'Snare': 'assets/samples/drums/rock_snare.wav',
@@ -51,7 +51,7 @@ class SoundLibrary {
       description: '808 kick, clap, tight hats & perc.',
       samplePath: 'assets/samples/drums/elec_kick.wav',
       rootMidi: 36,
-      colorValue: 0xFFBA68C8,
+      colorValue: 0xFFFFB020,
       drumKit: {
         'Kick': 'assets/samples/drums/elec_kick.wav',
         'Snare': 'assets/samples/drums/elec_snare.wav',
@@ -68,7 +68,7 @@ class SoundLibrary {
       description: 'Warm fingered electric bass.',
       samplePath: 'assets/samples/bass/bass_clean_c2.wav',
       rootMidi: 36, // C2
-      colorValue: 0xFF4DB6AC,
+      colorValue: 0xFF00D4FF,
     ),
     SoundPreset(
       id: 'bass_driven',
@@ -77,7 +77,7 @@ class SoundLibrary {
       description: 'Slightly overdriven bass for rock/indie.',
       samplePath: 'assets/samples/bass/bass_driven_c2.wav',
       rootMidi: 36,
-      colorValue: 0xFF26A69A,
+      colorValue: 0xFF00B8D4,
     ),
     SoundPreset(
       id: 'bass_808',
@@ -86,7 +86,7 @@ class SoundLibrary {
       description: 'Deep subby 808-style sine bass.',
       samplePath: 'assets/samples/bass/bass_808_c2.wav',
       rootMidi: 36,
-      colorValue: 0xFF00897B,
+      colorValue: 0xFF0097A7,
     ),
     // Guitar
     SoundPreset(
@@ -96,7 +96,7 @@ class SoundLibrary {
       description: 'Plucked clean electric tone.',
       samplePath: 'assets/samples/guitar/clean_e2.wav',
       rootMidi: 40, // E2
-      colorValue: 0xFFFFB74D,
+      colorValue: 0xFF9B6BFF,
     ),
     SoundPreset(
       id: 'gtr_crunch',
@@ -105,7 +105,7 @@ class SoundLibrary {
       description: 'Medium-gain crunch rhythm tone.',
       samplePath: 'assets/samples/guitar/crunch_e2.wav',
       rootMidi: 40,
-      colorValue: 0xFFFFA726,
+      colorValue: 0xFFB388FF,
     ),
     SoundPreset(
       id: 'gtr_high',
@@ -114,7 +114,7 @@ class SoundLibrary {
       description: 'Saturated lead/rhythm high gain.',
       samplePath: 'assets/samples/guitar/highgain_e2.wav',
       rootMidi: 40,
-      colorValue: 0xFFEF6C00,
+      colorValue: 0xFF7C4DFF,
     ),
     // Keys
     SoundPreset(
@@ -124,7 +124,7 @@ class SoundLibrary {
       description: 'Simple additive piano for melodies & chords.',
       samplePath: 'assets/samples/keys/piano_c4.wav',
       rootMidi: 60, // C4
-      colorValue: 0xFF64B5F6,
+      colorValue: 0xFF7B8CFF,
     ),
     SoundPreset(
       id: 'keys_pad',
@@ -133,7 +133,7 @@ class SoundLibrary {
       description: 'Slow-attack ambient pad.',
       samplePath: 'assets/samples/keys/pad_c4.wav',
       rootMidi: 60,
-      colorValue: 0xFF7986CB,
+      colorValue: 0xFF9FA8DA,
     ),
   ];
 

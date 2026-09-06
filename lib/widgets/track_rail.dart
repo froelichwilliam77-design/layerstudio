@@ -4,11 +4,18 @@ import '../models/track.dart';
 import '../services/studio_controller.dart';
 import '../theme/studio_theme.dart';
 
-/// Phone-first track selector: drums as primary beat surface, melodic as layers.
-class TrackRail extends StatelessWidget {
+/// Compact single-row track nav. Secondary track/settings live in an expandable panel.
+class TrackRail extends StatefulWidget {
   const TrackRail({super.key, required this.controller});
 
   final StudioController controller;
+
+  @override
+  State<TrackRail> createState() => _TrackRailState();
+}
+
+class _TrackRailState extends State<TrackRail> {
+  bool _expanded = false;
 
   IconData _iconFor(TrackCategory cat) => switch (cat) {
         TrackCategory.drums => Icons.grid_view_rounded,
@@ -20,235 +27,259 @@ class TrackRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final controller = widget.controller;
     final tracks = controller.project?.tracks ?? [];
     if (tracks.isEmpty) return const SizedBox.shrink();
 
-    final drums = tracks.where((t) => t.category == TrackCategory.drums).toList();
+    final drums =
+        tracks.where((t) => t.category == TrackCategory.drums).toList();
     final layers = tracks
         .where((t) =>
             t.category == TrackCategory.bass ||
             t.category == TrackCategory.guitar ||
-            t.category == TrackCategory.keys)
+            t.category == TrackCategory.keys ||
+            t.category == TrackCategory.mic)
         .toList();
+    final ordered = [...drums, ...layers];
+    final selected = controller.selectedTrack;
 
     return Material(
       color: StudioColors.surface,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _sectionLabel('BEAT', accent: StudioColors.accent2),
-            const SizedBox(height: 6),
-            if (drums.isEmpty)
-              _emptyHint(
-                'Add a drum kit in Sounds — pads & step seq live here.',
-              )
-            else
-              SizedBox(
-                height: 56,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: drums.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (context, i) => _DrumCard(
-                    track: drums[i],
-                    selected: drums[i].id == controller.selectedTrackId,
-                    onTap: () => controller.selectTrack(drums[i].id),
-                    icon: _iconFor(TrackCategory.drums),
-                  ),
-                ),
-              ),
-            const SizedBox(height: 10),
-            Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            height: 48,
+            child: Row(
               children: [
                 Expanded(
-                  child: _sectionLabel('LAYERS', accent: StudioColors.textDim),
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    itemCount: ordered.isEmpty ? 1 : ordered.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 8),
+                    itemBuilder: (context, i) {
+                      if (ordered.isEmpty) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: StudioColors.surface2,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: StudioColors.border),
+                          ),
+                          alignment: Alignment.center,
+                          child: const Text(
+                            'Add drums in Sounds',
+                            style: TextStyle(
+                                fontSize: 12, color: StudioColors.textDim),
+                          ),
+                        );
+                      }
+                      final t = ordered[i];
+                      final isSelected = t.id == controller.selectedTrackId;
+                      final color = StudioColors.forTrack(t);
+                      final isLayer = t.category.isLayer;
+                      return Material(
+                        color: isSelected
+                            ? color.withValues(alpha: 0.30)
+                            : StudioColors.surface2,
+                        borderRadius: BorderRadius.circular(12),
+                        child: InkWell(
+                          onTap: () => controller.selectTrack(t.id),
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color:
+                                    isSelected ? color : StudioColors.border,
+                                width: isSelected ? 1.5 : 1,
+                              ),
+                              boxShadow: isSelected
+                                  ? [
+                                      BoxShadow(
+                                        color: color.withValues(alpha: 0.35),
+                                        blurRadius: 8,
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: color,
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: color.withValues(alpha: 0.7),
+                                        blurRadius: 6,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Icon(_iconFor(t.category),
+                                    size: 16, color: color),
+                                const SizedBox(width: 6),
+                                Text(
+                                  t.category == TrackCategory.drums
+                                      ? t.name
+                                      : '${t.category.shortLabel} · ${t.name}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: isSelected
+                                        ? FontWeight.w800
+                                        : FontWeight.w600,
+                                    color: isLayer && !isSelected
+                                        ? StudioColors.textDim
+                                        : StudioColors.text,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
-                Text(
-                  'Bass · Guitar · Keys',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: StudioColors.textDim.withValues(alpha: 0.85),
-                    letterSpacing: 0.2,
+                IconButton(
+                  tooltip: _expanded ? 'Collapse' : 'Track settings',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => setState(() => _expanded = !_expanded),
+                  icon: Icon(
+                    _expanded
+                        ? Icons.expand_less_rounded
+                        : Icons.tune_rounded,
+                    color: _expanded
+                        ? StudioColors.accent
+                        : StudioColors.textDim,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 6),
-            if (layers.isEmpty)
-              _emptyHint('Layer bass, guitar, or keys when the groove is set.')
-            else
-              SizedBox(
-                height: 40,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: layers.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (context, i) {
-                    final t = layers[i];
-                    final selected = t.id == controller.selectedTrackId;
-                    return _LayerChip(
-                      track: t,
-                      selected: selected,
-                      icon: _iconFor(t.category),
-                      onTap: () => controller.selectTrack(t.id),
-                    );
-                  },
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _sectionLabel(String text, {required Color accent}) {
-    return Text(
-      text,
-      style: TextStyle(
-        fontSize: 11,
-        fontWeight: FontWeight.w800,
-        letterSpacing: 1.4,
-        color: accent,
-      ),
-    );
-  }
-
-  Widget _emptyHint(String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: StudioColors.surface2,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: StudioColors.border),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(fontSize: 12, color: StudioColors.textDim),
-      ),
-    );
-  }
-}
-
-class _DrumCard extends StatelessWidget {
-  const _DrumCard({
-    required this.track,
-    required this.selected,
-    required this.onTap,
-    required this.icon,
-  });
-
-  final Track track;
-  final bool selected;
-  final VoidCallback onTap;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = Color(track.colorValue);
-    return Material(
-      color: selected
-          ? color.withValues(alpha: 0.28)
-          : StudioColors.surface2,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          constraints: const BoxConstraints(minWidth: 168),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: selected ? color : StudioColors.border,
-              width: selected ? 1.5 : 1,
-            ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.35),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, size: 20, color: StudioColors.text),
+          if (_expanded)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: StudioColors.border)),
               ),
-              const SizedBox(width: 10),
-              Flexible(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text(
-                      'DRUMS',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.1,
-                        color: StudioColors.accent2,
-                      ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 8),
+                  Text(
+                    'TRACK · SETTINGS',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.2,
+                      color: selected != null
+                          ? StudioColors.forTrack(selected)
+                          : StudioColors.textDim,
                     ),
-                    Text(
-                      track.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight:
-                            selected ? FontWeight.w800 : FontWeight.w600,
-                      ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    drums.isEmpty
+                        ? 'Add a drum kit in Sounds — pads & step seq live on Beat.'
+                        : layers.isEmpty
+                            ? 'Layer bass, guitar, or keys when the groove is set.'
+                            : 'Beat kits first; layers after. Colors carry into modes & steps.',
+                    style: const TextStyle(
+                        fontSize: 12, color: StudioColors.textDim),
+                  ),
+                  if (selected != null) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        _MiniToggle(
+                          label: 'Mute',
+                          active: selected.muted,
+                          color: StudioColors.danger,
+                          onTap: () {
+                            selected.muted = !selected.muted;
+                            controller.updateTrack(selected);
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        _MiniToggle(
+                          label: 'Solo',
+                          active: selected.solo,
+                          color: StudioColors.warning,
+                          onTap: () {
+                            selected.solo = !selected.solo;
+                            controller.updateTrack(selected);
+                          },
+                        ),
+                        const Spacer(),
+                        Text(
+                          selected.category.shortLabel,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: StudioColors.forTrack(selected),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
-                ),
+                ],
               ),
-            ],
-          ),
-        ),
+            ),
+        ],
       ),
     );
   }
 }
 
-class _LayerChip extends StatelessWidget {
-  const _LayerChip({
-    required this.track,
-    required this.selected,
-    required this.icon,
+class _MiniToggle extends StatelessWidget {
+  const _MiniToggle({
+    required this.label,
+    required this.active,
+    required this.color,
     required this.onTap,
   });
 
-  final Track track;
-  final bool selected;
-  final IconData icon;
+  final String label;
+  final bool active;
+  final Color color;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final color = Color(track.colorValue);
-    return FilterChip(
-      avatar: Icon(icon, size: 16, color: StudioColors.text),
-      label: Text(
-        '${track.category.shortLabel} · ${track.name}',
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+    return Material(
+      color: active ? color.withValues(alpha: 0.28) : StudioColors.surface2,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: active ? color : StudioColors.border),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: active ? color : StudioColors.textDim,
+            ),
+          ),
         ),
       ),
-      selected: selected,
-      showCheckmark: false,
-      onSelected: (_) => onTap(),
-      selectedColor: color.withValues(alpha: 0.32),
-      backgroundColor: StudioColors.surface2,
-      side: BorderSide(
-        color: selected ? color : StudioColors.border,
-      ),
-      visualDensity: VisualDensity.compact,
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      padding: const EdgeInsets.symmetric(horizontal: 4),
     );
   }
 }

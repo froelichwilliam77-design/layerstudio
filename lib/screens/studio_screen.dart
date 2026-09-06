@@ -9,6 +9,7 @@ import '../widgets/drum_pads.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/guitar_chords.dart';
 import '../widgets/piano_roll.dart';
+import '../widgets/segmented_control.dart';
 import '../widgets/step_sequencer.dart';
 import '../widgets/touch_keyboard.dart';
 import '../widgets/track_rail.dart';
@@ -197,8 +198,7 @@ class _Editor extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _EditorHeader(track: track),
-        _ModeBar(c: c, track: track),
+        _EditorToolbar(c: c, track: track),
         Expanded(child: _editorBody(track)),
       ],
     );
@@ -222,204 +222,132 @@ class _Editor extends StatelessWidget {
   }
 }
 
-class _EditorHeader extends StatelessWidget {
-  const _EditorHeader({required this.track});
-  final Track track;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = Color(track.colorValue);
-    final isDrums = track.category.isBeatPrimary;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.28),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: color.withValues(alpha: 0.55)),
-            ),
-            child: Text(
-              isDrums ? 'BEAT · DRUMS' : 'LAYER · ${track.category.shortLabel.toUpperCase()}',
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.8,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              track.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 15,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ModeBar extends StatelessWidget {
-  const _ModeBar({required this.c, required this.track});
+/// Single compact row: track color badge + name + mode segmented control.
+class _EditorToolbar extends StatelessWidget {
+  const _EditorToolbar({required this.c, required this.track});
   final StudioController c;
   final Track track;
 
   @override
   Widget build(BuildContext context) {
-    if (track.category == TrackCategory.drums) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
-        child: Row(
-          children: [
-            Expanded(
-              child: _ModeChip(
-                label: 'Pads',
-                selected: track.effectiveMode == TrackInstrumentMode.drumPads,
-                onTap: () {
-                  c.setTrackInstrumentMode(track, TrackInstrumentMode.drumPads);
-                  c.setTab(StudioTab.drums);
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _ModeChip(
-                label: 'Step Seq',
-                selected: track.effectiveMode == TrackInstrumentMode.stepSeq,
-                onTap: () {
-                  c.setTrackInstrumentMode(track, TrackInstrumentMode.stepSeq);
-                  c.setTab(StudioTab.drums);
-                },
-              ),
-            ),
-          ],
-        ),
-      );
-    }
+    final color = StudioColors.forTrack(track);
+    final isDrums = track.category.isBeatPrimary;
+    final mode = _modeSegment();
 
-    if (track.category == TrackCategory.bass ||
-        track.category == TrackCategory.mic) {
-      // Single primary editor — no cluttered mode strip.
-      return const SizedBox(height: 4);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            height: 34,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            flex: 2,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  isDrums
+                      ? 'BEAT'
+                      : 'LAYER · ${track.category.shortLabel.toUpperCase()}',
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.9,
+                    color: color,
+                  ),
+                ),
+                Text(
+                  track.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (mode != null) ...[
+            const SizedBox(width: 8),
+            Expanded(flex: 3, child: mode),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget? _modeSegment() {
+    final color = StudioColors.forTrack(track);
+
+    if (track.category == TrackCategory.drums) {
+      final current = track.effectiveMode == TrackInstrumentMode.drumPads
+          ? TrackInstrumentMode.drumPads
+          : TrackInstrumentMode.stepSeq;
+      return StudioSegmentedControl<TrackInstrumentMode>(
+        accent: color,
+        value: current,
+        segments: const [
+          StudioSegment(value: TrackInstrumentMode.drumPads, label: 'Pads'),
+          StudioSegment(value: TrackInstrumentMode.stepSeq, label: 'Step Seq'),
+        ],
+        onChanged: (mode) {
+          c.setTrackInstrumentMode(track, mode);
+          c.setTab(StudioTab.drums);
+        },
+      );
     }
 
     if (track.category == TrackCategory.keys) {
       final onKeyboard = c.tab == StudioTab.keys;
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
-        child: Row(
-          children: [
-            Expanded(
-              child: _ModeChip(
-                label: 'Piano Roll',
-                selected: !onKeyboard,
-                onTap: () {
-                  c.setTrackInstrumentMode(track, TrackInstrumentMode.pianoRoll);
-                  c.setTab(StudioTab.piano);
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _ModeChip(
-                label: 'Keyboard',
-                selected: onKeyboard,
-                onTap: () {
-                  c.setTrackInstrumentMode(track, TrackInstrumentMode.keyboard);
-                  c.setTab(StudioTab.keys);
-                },
-              ),
-            ),
-          ],
-        ),
+      return StudioSegmentedControl<String>(
+        accent: color,
+        value: onKeyboard ? 'keyboard' : 'piano',
+        segments: const [
+          StudioSegment(value: 'piano', label: 'Piano Roll'),
+          StudioSegment(value: 'keyboard', label: 'Keyboard'),
+        ],
+        onChanged: (v) {
+          if (v == 'keyboard') {
+            c.setTrackInstrumentMode(track, TrackInstrumentMode.keyboard);
+            c.setTab(StudioTab.keys);
+          } else {
+            c.setTrackInstrumentMode(track, TrackInstrumentMode.pianoRoll);
+            c.setTab(StudioTab.piano);
+          }
+        },
       );
     }
 
     if (track.category == TrackCategory.guitar) {
       final onChords = c.tab == StudioTab.guitar;
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
-        child: Row(
-          children: [
-            Expanded(
-              child: _ModeChip(
-                label: 'Piano Roll',
-                selected: !onChords,
-                onTap: () {
-                  c.setTrackInstrumentMode(track, TrackInstrumentMode.pianoRoll);
-                  c.setTab(StudioTab.piano);
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _ModeChip(
-                label: 'Chords',
-                selected: onChords,
-                onTap: () {
-                  c.setTrackInstrumentMode(
-                      track, TrackInstrumentMode.guitarChords);
-                  c.setTab(StudioTab.guitar);
-                },
-              ),
-            ),
-          ],
-        ),
+      return StudioSegmentedControl<String>(
+        accent: color,
+        value: onChords ? 'chords' : 'piano',
+        segments: const [
+          StudioSegment(value: 'piano', label: 'Piano Roll'),
+          StudioSegment(value: 'chords', label: 'Chords'),
+        ],
+        onChanged: (v) {
+          if (v == 'chords') {
+            c.setTrackInstrumentMode(track, TrackInstrumentMode.guitarChords);
+            c.setTab(StudioTab.guitar);
+          } else {
+            c.setTrackInstrumentMode(track, TrackInstrumentMode.pianoRoll);
+            c.setTab(StudioTab.piano);
+          }
+        },
       );
     }
 
-    return const SizedBox.shrink();
-  }
-}
-
-class _ModeChip extends StatelessWidget {
-  const _ModeChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: selected
-          ? StudioColors.accent.withValues(alpha: 0.28)
-          : StudioColors.surface2,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          height: 40,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: selected ? StudioColors.accent : StudioColors.border,
-            ),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-              fontSize: 13,
-            ),
-          ),
-        ),
-      ),
-    );
+    return null;
   }
 }

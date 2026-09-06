@@ -5,8 +5,15 @@ import '../services/error_log.dart';
 import '../services/studio_controller.dart';
 import '../theme/studio_theme.dart';
 
-class TransportBar extends StatelessWidget {
+class TransportBar extends StatefulWidget {
   const TransportBar({super.key});
+
+  @override
+  State<TransportBar> createState() => _TransportBarState();
+}
+
+class _TransportBarState extends State<TransportBar> {
+  bool _settingsOpen = false;
 
   @override
   Widget build(BuildContext context) {
@@ -19,7 +26,7 @@ class TransportBar extends StatelessWidget {
     final step = (c.playheadStep % 4) + 1;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: const BoxDecoration(
         color: StudioColors.surface,
         border: Border(top: BorderSide(color: StudioColors.border)),
@@ -107,6 +114,20 @@ class TransportBar extends StatelessWidget {
                   ),
                 ),
                 IconButton(
+                  tooltip: _settingsOpen ? 'Hide settings' : 'Swing & arrange',
+                  onPressed: () =>
+                      setState(() => _settingsOpen = !_settingsOpen),
+                  icon: Icon(
+                    _settingsOpen
+                        ? Icons.expand_more_rounded
+                        : Icons.tune_rounded,
+                    size: 20,
+                    color: _settingsOpen
+                        ? StudioColors.accent
+                        : StudioColors.textDim,
+                  ),
+                ),
+                IconButton(
                   tooltip: 'Export WAV',
                   onPressed: () async {
                     final err = await c.exportAndShare();
@@ -138,52 +159,57 @@ class TransportBar extends StatelessWidget {
                 ),
               ],
             ),
-            Row(
-              children: [
-                const Text('Swing',
-                    style: TextStyle(fontSize: 11, color: StudioColors.textDim)),
-                Expanded(
-                  child: Slider(
-                    min: 0,
-                    max: 100,
-                    divisions: 20,
-                    value: p.swingPercent.toDouble(),
-                    label: '${p.swingPercent}%',
-                    onChanged: (v) =>
-                        c.updateProjectMeta(swingPercent: v.round()),
-                  ),
-                ),
-                PopupMenuButton<int>(
-                  tooltip: 'Count-in',
-                  initialValue: p.countInBars,
-                  onSelected: (v) => c.updateProjectMeta(countInBars: v),
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: 0, child: Text('Count-in off')),
-                    PopupMenuItem(value: 1, child: Text('1 bar count-in')),
-                    PopupMenuItem(value: 2, child: Text('2 bar count-in')),
-                  ],
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    child: Text(
-                      p.countInBars == 0 ? 'Count' : 'Count×${p.countInBars}',
+            if (_settingsOpen)
+              Row(
+                children: [
+                  const Text('Swing',
                       style: TextStyle(
-                        fontSize: 11,
-                        color: p.countInBars > 0
-                            ? StudioColors.accent
-                            : StudioColors.textDim,
+                          fontSize: 11, color: StudioColors.textDim)),
+                  Expanded(
+                    child: Slider(
+                      min: 0,
+                      max: 100,
+                      divisions: 20,
+                      value: p.swingPercent.toDouble(),
+                      label: '${p.swingPercent}%',
+                      onChanged: (v) =>
+                          c.updateProjectMeta(swingPercent: v.round()),
+                    ),
+                  ),
+                  PopupMenuButton<int>(
+                    tooltip: 'Count-in',
+                    initialValue: p.countInBars,
+                    onSelected: (v) => c.updateProjectMeta(countInBars: v),
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 0, child: Text('Count-in off')),
+                      PopupMenuItem(value: 1, child: Text('1 bar count-in')),
+                      PopupMenuItem(value: 2, child: Text('2 bar count-in')),
+                    ],
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: Text(
+                        p.countInBars == 0
+                            ? 'Count'
+                            : 'Count×${p.countInBars}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: p.countInBars > 0
+                              ? StudioColors.accent
+                              : StudioColors.textDim,
+                        ),
                       ),
                     ),
                   ),
-                ),
-                FilterChip(
-                  label: Text(p.songMode ? 'Song' : 'Pattern',
-                      style: const TextStyle(fontSize: 11)),
-                  selected: p.songMode,
-                  onSelected: (v) => c.updateProjectMeta(songMode: v),
-                  visualDensity: VisualDensity.compact,
-                ),
-              ],
-            ),
+                  FilterChip(
+                    label: Text(p.songMode ? 'Song' : 'Pattern',
+                        style: const TextStyle(fontSize: 11)),
+                    selected: p.songMode,
+                    showCheckmark: false,
+                    onSelected: (v) => c.updateProjectMeta(songMode: v),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ),
           ],
         ),
       ),

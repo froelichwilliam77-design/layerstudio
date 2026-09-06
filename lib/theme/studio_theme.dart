@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../models/track.dart';
+
 class StudioColors {
   static const bg = Color(0xFF0E0F12);
   static const surface = Color(0xFF171A21);
@@ -13,6 +15,28 @@ class StudioColors {
   static const textDim = Color(0xFF9AA3B5);
   static const play = Color(0xFF3DDC97);
   static const record = Color(0xFFFF4D6D);
+
+  /// Signature track hues (visual-guide Foundation).
+  static const drumsCopper = Color(0xFFE07A3D);
+  static const drumsAmber = Color(0xFFFFB020);
+  static const bassCyan = Color(0xFF00D4FF);
+  static const guitarViolet = Color(0xFF9B6BFF);
+  static const keysBlue = Color(0xFF7B8CFF);
+  static const micGreen = Color(0xFF66BB6A);
+
+  static Color forCategory(TrackCategory cat) => switch (cat) {
+        TrackCategory.drums => drumsCopper,
+        TrackCategory.bass => bassCyan,
+        TrackCategory.guitar => guitarViolet,
+        TrackCategory.keys => keysBlue,
+        TrackCategory.mic => micGreen,
+      };
+
+  static Color forTrack(Track track) => Color(track.colorValue);
+
+  /// Luminous fill for active sequencer / mode chrome.
+  static Color luminous(Color base, {double alpha = 0.95}) =>
+      Color.alphaBlend(base.withValues(alpha: alpha), surface2);
 }
 
 ThemeData buildStudioTheme() {
@@ -31,6 +55,7 @@ ThemeData buildStudioTheme() {
       foregroundColor: StudioColors.text,
       elevation: 0,
       centerTitle: false,
+      toolbarHeight: 48,
     ),
     cardTheme: CardThemeData(
       color: StudioColors.surface,

@@ -81,6 +81,7 @@ class Track {
     TrackInstrumentMode? instrumentMode,
     bool? recordArmed,
     String? recordedFilePath,
+    int? colorValue,
   }) {
     return Track(
       id: id,
@@ -89,7 +90,7 @@ class Track {
       presetId: presetId,
       sampleRoot: sampleRoot,
       rootMidi: rootMidi,
-      colorValue: colorValue,
+      colorValue: colorValue ?? this.colorValue,
       volume: volume ?? this.volume,
       pan: pan ?? this.pan,
       muted: muted ?? this.muted,

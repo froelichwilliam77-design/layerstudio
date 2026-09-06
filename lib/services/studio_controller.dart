@@ -74,6 +74,11 @@ class StudioController extends ChangeNotifier {
   int snapSteps = 1;
   int drawProbability = 100;
 
+  double strumOffsetMs = 18;
+  bool chordAdd7th = false;
+  bool chordSus4 = false;
+  int chordInversion = 0;
+
   /// Soft pitch warning for UI banner.
   String? pitchWarning;
 
@@ -234,11 +239,18 @@ class StudioController extends ChangeNotifier {
     selectedTrackId = id;
     final t = selectedTrack;
     if (t != null) {
+      final mode = t.effectiveMode;
       tab = switch (t.category) {
         TrackCategory.drums => StudioTab.drums,
-        TrackCategory.bass => StudioTab.piano,
-        TrackCategory.guitar => StudioTab.guitar,
-        TrackCategory.keys => StudioTab.keys,
+        TrackCategory.bass => mode == TrackInstrumentMode.pianoRoll
+            ? StudioTab.piano
+            : StudioTab.keys,
+        TrackCategory.guitar => mode == TrackInstrumentMode.pianoRoll
+            ? StudioTab.piano
+            : StudioTab.guitar,
+        TrackCategory.keys => mode == TrackInstrumentMode.pianoRoll
+            ? StudioTab.piano
+            : StudioTab.keys,
         TrackCategory.mic => StudioTab.arrange,
       };
     }
@@ -324,7 +336,7 @@ class StudioController extends ChangeNotifier {
       presetId: 'mic',
       sampleRoot: '',
       rootMidi: 60,
-      colorValue: 0xFF81C784,
+      colorValue: 0xFF66BB6A,
       instrumentMode: TrackInstrumentMode.micRecord,
     );
     p.tracks.add(track);
@@ -669,6 +681,36 @@ class StudioController extends ChangeNotifier {
     }
   }
 
+  int stepVelocity(Track track, int padIndex, int step) {
+    final pitch = DrumPadMap.pitchForPad(padIndex);
+    try {
+      return track.notes
+          .firstWhere((n) => n.pitch == pitch && n.startStep == step)
+          .velocity;
+    } catch (_) {
+      return drawVelocity;
+    }
+  }
+
+  void setStepVelocity({
+    required String trackId,
+    required int padIndex,
+    required int step,
+    required int velocity,
+  }) {
+    final p = project;
+    if (p == null) return;
+    final track = p.tracks.firstWhere((t) => t.id == trackId);
+    final pitch = DrumPadMap.pitchForPad(padIndex);
+    _pushNotesEdit('Step velocity', trackId, () {
+      for (final n in track.notes) {
+        if (n.pitch == pitch && n.startStep == step) {
+          n.velocity = velocity.clamp(1, 127);
+        }
+      }
+    });
+  }
+
   void clearTrackNotes(String trackId) {
     final p = project;
     if (p == null) return;
@@ -948,6 +990,151 @@ class StudioController extends ChangeNotifier {
   void setTrackInstrumentMode(Track track, TrackInstrumentMode mode) {
     track.instrumentMode = mode;
     notifyListeners();
+  }
+
+  void updateTrackFx(Track track, {FxSettings? fx}) {
+    if (fx != null) track.fx = fx;
+    final f = track.fx;
+    f.eqHigh = (f.tone * 2 - 1).clamp(-1.0, 1.0);
+    f.eqLow = ((1 - f.tone) * 0.4 - 0.2).clamp(-1.0, 1.0);
+    f.reverb = (f.cabSim * 0.35).clamp(0.0, 1.0);
+    if (f.gain > 0.55 && f.ampPreset == AmpPreset.clean) {
+      f.ampPreset = track.category == TrackCategory.bass
+          ? AmpPreset.bassDrive
+          : AmpPreset.crunch;
+    } else if (f.gain < 0.25 &&
+        (f.ampPreset == AmpPreset.crunch ||
+            f.ampPreset == AmpPreset.bassDrive)) {
+      f.ampPreset = AmpPreset.clean;
+    }
+    notifyListeners();
+  }
+
+  void setStrumOffsetMs(double ms) {
+    strumOffsetMs = ms.clamp(0, 80);
+    notifyListeners();
+  }
+
+  void setChordAdd7th(bool v) {
+    chordAdd7th = v;
+    notifyListeners();
+  }
+
+  void setChordSus4(bool v) {
+    chordSus4 = v;
+    notifyListeners();
+  }
+
+  void setChordInversion(int v) {
+    chordInversion = v.clamp(0, 2);
+    notifyListeners();
+  }
+
+  void paintNote({
+    required String trackId,
+    required int pitch,
+    required int startStep,
+    int lengthSteps = 1,
+    int? velocity,
+    int? probability,
+  }) {
+    final p = project;
+    if (p == null) return;
+    final track = p.tracks.firstWhere((t) => t.id == trackId);
+    var finalPitch = pitch;
+    if (scaleLock &&
+        track.category != TrackCategory.drums &&
+        track.category != TrackCategory.mic) {
+      finalPitch = MusicTheory.snapToScale(pitch, p.key, p.scale);
+    }
+    if (track.category != TrackCategory.drums &&
+        track.category != TrackCategory.mic) {
+      finalPitch = MusicTheory.clampPitch(finalPitch, track.rootMidi);
+    }
+    final snapped = (startStep ~/ snapSteps) * snapSteps;
+    if (track.notes.any((n) => n.pitch == finalPitch && n.startStep == snapped)) {
+      return;
+    }
+    _pushNotesEdit('Paint note', trackId, () {
+      track.notes.add(NoteEvent(
+        id: _uuid.v4(),
+        pitch: finalPitch,
+        startStep: snapped,
+        lengthSteps: lengthSteps,
+        velocity: velocity ?? drawVelocity,
+        probability: probability ?? drawProbability,
+      ));
+    });
+  }
+
+  void updateNoteParams({
+    required String trackId,
+    required String noteId,
+    int? velocity,
+    int? lengthSteps,
+    int? probability,
+  }) {
+    final p = project;
+    if (p == null) return;
+    _pushNotesEdit('Note params', trackId, () {
+      final track = p.tracks.firstWhere((t) => t.id == trackId);
+      for (final n in track.notes) {
+        if (n.id == noteId) {
+          if (velocity != null) n.velocity = velocity.clamp(1, 127);
+          if (lengthSteps != null) n.lengthSteps = lengthSteps.clamp(1, 64);
+          if (probability != null) n.probability = probability.clamp(0, 100);
+        }
+      }
+    });
+  }
+
+  NoteEvent? noteAt(Track track, int pitch, int step) {
+    try {
+      return track.notes.firstWhere(
+        (n) => n.pitch == pitch && n.startStep == step,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  List<int> buildChordPitches(int rootMidi, {required bool minor}) {
+    final notes = <int>[];
+    if (chordSus4) {
+      notes.addAll([rootMidi, rootMidi + 5, rootMidi + 7]);
+    } else {
+      notes.addAll(MusicTheory.triad(rootMidi, minor: minor));
+    }
+    if (chordAdd7th) {
+      notes.add(rootMidi + (minor ? 10 : 11));
+    }
+    var out = List<int>.from(notes)..sort();
+    for (var i = 0; i < chordInversion && out.isNotEmpty; i++) {
+      final n = out.removeAt(0);
+      out.add(n + 12);
+    }
+    return out;
+  }
+
+  Future<void> strumChord(Track track, List<int> pitches) async {
+    for (var i = 0; i < pitches.length; i++) {
+      if (i > 0 && strumOffsetMs > 0) {
+        await Future<void>.delayed(
+          Duration(milliseconds: strumOffsetMs.round().clamp(0, 80)),
+        );
+      }
+      await triggerNote(track, pitches[i], velocity: 0.85);
+    }
+    if (isPlaying) {
+      for (final pitch in pitches) {
+        addOrToggleNote(
+          trackId: track.id,
+          pitch: pitch,
+          startStep: playheadStep,
+          lengthSteps: 4,
+        );
+      }
+    }
   }
 
   void seek(int step) {

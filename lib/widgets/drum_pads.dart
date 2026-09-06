@@ -20,6 +20,7 @@ class DrumPads extends StatelessWidget {
     }
     final names = kit.keys.toList();
     final c = context.read<StudioController>();
+    final color = StudioColors.forTrack(track);
 
     return GridView.builder(
       padding: const EdgeInsets.all(12),
@@ -32,13 +33,12 @@ class DrumPads extends StatelessWidget {
       itemCount: names.length,
       itemBuilder: (context, i) {
         return Material(
-          color: Color(track.colorValue).withValues(alpha: 0.25),
+          color: color.withValues(alpha: 0.28),
           borderRadius: BorderRadius.circular(16),
           child: InkWell(
             borderRadius: BorderRadius.circular(16),
             onTap: () {
               c.triggerPad(track, i);
-              // Optional: record into current step while playing / always
               if (!c.eraseMode) {
                 c.setStepCell(
                   trackId: track.id,
@@ -52,7 +52,14 @@ class DrumPads extends StatelessWidget {
             child: Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: StudioColors.border),
+                border: Border.all(color: color.withValues(alpha: 0.65)),
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.22),
+                    blurRadius: 10,
+                    spreadRadius: 0.5,
+                  ),
+                ],
               ),
               alignment: Alignment.center,
               child: Text(
