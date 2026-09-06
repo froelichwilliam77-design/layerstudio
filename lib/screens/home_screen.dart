@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -39,6 +42,11 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Import project',
+            onPressed: () => _importProject(context),
+            icon: const Icon(Icons.file_upload_outlined),
+          ),
           IconButton(
             tooltip: 'Refresh',
             onPressed: () => c.refreshRecent(),
@@ -131,6 +139,45 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
     );
+  }
+
+
+  Future<void> _importProject(BuildContext context) async {
+    final c = context.read<StudioController>();
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['layerstudio', 'zip'],
+        withData: false,
+      );
+      if (result == null || result.files.isEmpty) return;
+      final path = result.files.single.path;
+      if (path == null) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not read selected file')),
+          );
+        }
+        return;
+      }
+      final err = await c.importProjectFile(File(path));
+      if (!context.mounted) return;
+      if (err != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Import failed: $err')),
+        );
+        return;
+      }
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const StudioScreen()),
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Import failed: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _newProject(BuildContext context) async {
