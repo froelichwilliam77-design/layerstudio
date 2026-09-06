@@ -7,6 +7,7 @@ import '../theme/studio_theme.dart';
 import '../widgets/arrange_view.dart';
 import '../widgets/drum_pads.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/fretboard.dart';
 import '../widgets/guitar_chords.dart';
 import '../widgets/piano_roll.dart';
 import '../widgets/segmented_control.dart';
@@ -205,20 +206,17 @@ class _Editor extends StatelessWidget {
   }
 
   Widget _editorBody(Track track) {
-    if (track.category == TrackCategory.drums) {
-      if (track.effectiveMode == TrackInstrumentMode.drumPads) {
-        return DrumPads(track: track);
-      }
-      return StepSequencer(track: track);
-    }
-    if (track.category == TrackCategory.keys && c.tab == StudioTab.keys) {
-      return TouchKeyboard(track: track);
-    }
-    if (track.category == TrackCategory.guitar && c.tab == StudioTab.guitar) {
-      return GuitarChordStrips(track: track);
-    }
-    // Bass (and keys/guitar piano-roll mode)
-    return PianoRoll(track: track);
+    return switch (track.effectiveMode) {
+      TrackInstrumentMode.drumPads => DrumPads(track: track),
+      TrackInstrumentMode.stepSeq => StepSequencer(track: track),
+      TrackInstrumentMode.fretboard => InstrumentFretboard(track: track),
+      TrackInstrumentMode.guitarChords => GuitarChordStrips(track: track),
+      TrackInstrumentMode.keyboard => TouchKeyboard(track: track),
+      TrackInstrumentMode.pianoRoll => PianoRoll(track: track),
+      TrackInstrumentMode.micRecord => const Center(
+          child: Text('Arm mic from Mixer / Arrange'),
+        ),
+    };
   }
 }
 
@@ -306,8 +304,40 @@ class _EditorToolbar extends StatelessWidget {
       );
     }
 
+    if (track.category == TrackCategory.bass) {
+      final mode = track.effectiveMode;
+      final value = mode == TrackInstrumentMode.fretboard
+          ? 'fret'
+          : mode == TrackInstrumentMode.keyboard
+              ? 'keys'
+              : 'piano';
+      return StudioSegmentedControl<String>(
+        accent: color,
+        value: value,
+        segments: const [
+          StudioSegment(value: 'fret', label: 'Fretboard'),
+          StudioSegment(value: 'piano', label: 'Piano Roll'),
+          StudioSegment(value: 'keys', label: 'Keys'),
+        ],
+        onChanged: (v) {
+          if (v == 'fret') {
+            c.setTrackInstrumentMode(track, TrackInstrumentMode.fretboard);
+            c.setTab(StudioTab.piano);
+          } else if (v == 'keys') {
+            c.setTrackInstrumentMode(track, TrackInstrumentMode.keyboard);
+            c.setTab(StudioTab.keys);
+          } else {
+            c.setTrackInstrumentMode(track, TrackInstrumentMode.pianoRoll);
+            c.setTab(StudioTab.piano);
+          }
+        },
+      );
+    }
+
     if (track.category == TrackCategory.keys) {
-      final onKeyboard = c.tab == StudioTab.keys;
+      final onKeyboard =
+          track.effectiveMode == TrackInstrumentMode.keyboard ||
+              (track.instrumentMode == null && c.tab == StudioTab.keys);
       return StudioSegmentedControl<String>(
         accent: color,
         value: onKeyboard ? 'keyboard' : 'piano',
@@ -328,17 +358,26 @@ class _EditorToolbar extends StatelessWidget {
     }
 
     if (track.category == TrackCategory.guitar) {
-      final onChords = c.tab == StudioTab.guitar;
+      final mode = track.effectiveMode;
+      final value = mode == TrackInstrumentMode.fretboard
+          ? 'fret'
+          : mode == TrackInstrumentMode.pianoRoll
+              ? 'piano'
+              : 'chords';
       return StudioSegmentedControl<String>(
         accent: color,
-        value: onChords ? 'chords' : 'piano',
+        value: value,
         segments: const [
-          StudioSegment(value: 'piano', label: 'Piano Roll'),
           StudioSegment(value: 'chords', label: 'Chords'),
+          StudioSegment(value: 'fret', label: 'Fretboard'),
+          StudioSegment(value: 'piano', label: 'Piano Roll'),
         ],
         onChanged: (v) {
           if (v == 'chords') {
             c.setTrackInstrumentMode(track, TrackInstrumentMode.guitarChords);
+            c.setTab(StudioTab.guitar);
+          } else if (v == 'fret') {
+            c.setTrackInstrumentMode(track, TrackInstrumentMode.fretboard);
             c.setTab(StudioTab.guitar);
           } else {
             c.setTrackInstrumentMode(track, TrackInstrumentMode.pianoRoll);

@@ -5,6 +5,7 @@ import '../models/track.dart';
 import '../services/studio_controller.dart';
 import '../theme/studio_theme.dart';
 import '../utils/music_theory.dart';
+import 'mini_amp_panel.dart';
 
 class PianoRoll extends StatefulWidget {
   const PianoRoll({super.key, required this.track});
@@ -36,7 +37,13 @@ class _PianoRollState extends State<PianoRoll> {
     final c = context.watch<StudioController>();
     final p = c.project!;
     final steps = p.loopEndStep.clamp(16, 256);
-    final pitches = highMidi - lowMidi + 1;
+    final accent = Color(widget.track.colorValue);
+    // Scale lock collapses off-key lanes (especially useful for bass piano roll).
+    final midiLanes = <int>[
+      for (var m = lowMidi; m <= highMidi; m++)
+        if (!c.scaleLock || MusicTheory.inScale(m, p.key, p.scale)) m,
+    ];
+    final pitches = midiLanes.length;
 
     return Column(
       children: [
@@ -56,6 +63,7 @@ class _PianoRollState extends State<PianoRoll> {
                 label: const Text('Scale lock'),
                 selected: c.scaleLock,
                 showCheckmark: false,
+                selectedColor: accent.withValues(alpha: 0.35),
                 onSelected: c.setScaleLock,
               ),
               const SizedBox(width: 8),
@@ -76,17 +84,19 @@ class _PianoRollState extends State<PianoRoll> {
                   min: 20,
                   max: 127,
                   value: c.drawVelocity.toDouble(),
-                  activeColor: Color(widget.track.colorValue),
+                  activeColor: accent,
                   onChanged: (v) => c.setDrawVelocity(v.round()),
                 ),
               ),
             ],
           ),
         ),
+        if (widget.track.category == TrackCategory.bass ||
+            widget.track.category == TrackCategory.guitar)
+          MiniAmpPanel(track: widget.track),
         Expanded(
           child: Row(
             children: [
-              // Pitch labels
               SizedBox(
                 width: 44,
                 child: ListView.builder(
@@ -95,7 +105,7 @@ class _PianoRollState extends State<PianoRoll> {
                   itemExtent: cellH,
                   reverse: true,
                   itemBuilder: (_, i) {
-                    final midi = lowMidi + i;
+                    final midi = midiLanes[i];
                     final inScale =
                         MusicTheory.inScale(midi, p.key, p.scale);
                     return Container(
@@ -120,7 +130,6 @@ class _PianoRollState extends State<PianoRoll> {
               Expanded(
                 child: NotificationListener<ScrollNotification>(
                   onNotification: (n) {
-                    // keep vertical label scroll in sync if needed — simplified
                     return false;
                   },
                   child: SingleChildScrollView(
@@ -133,7 +142,7 @@ class _PianoRollState extends State<PianoRoll> {
                         itemExtent: cellH,
                         reverse: true,
                         itemBuilder: (_, i) {
-                          final midi = lowMidi + i;
+                          final midi = midiLanes[i];
                           final inScale =
                               MusicTheory.inScale(midi, p.key, p.scale);
                           return Row(
@@ -150,7 +159,7 @@ class _PianoRollState extends State<PianoRoll> {
                                     (n) =>
                                         n.pitch == midi && n.startStep == s,
                                   ),
-                                  color: Color(widget.track.colorValue),
+                                  color: accent,
                                   onTap: () {
                                     c.addOrToggleNote(
                                       trackId: widget.track.id,

@@ -229,6 +229,11 @@ class AudioEngine {
       src.filters.echoFilter.activate();
       src.filters.waveShaperFilter.activate();
       try {
+        src.filters.biquadFilter.activate();
+      } catch (e) {
+        debugPrint('Biquad insert skipped for $key: $e');
+      }
+      try {
         src.filters.freeverbFilter.activate();
       } catch (e) {
         debugPrint('Freeverb insert skipped for $key: $e');
@@ -244,6 +249,9 @@ class AudioEngine {
     try {
       final delay = fx.delay.clamp(0.0, 1.0);
       final reverb = fx.reverb.clamp(0.0, 1.0);
+      final gain = fx.gain.clamp(0.0, 1.0);
+      final tone = fx.tone.clamp(0.0, 1.0);
+      final cab = fx.cabSim;
 
       src.filters.echoFilter.delay(soundHandle: handle).value =
           0.18 + delay * 0.45;
@@ -252,31 +260,55 @@ class AudioEngine {
       src.filters.echoFilter.wet(soundHandle: handle).value =
           (delay * 0.75).clamp(0.0, 0.85);
 
-      final amount = switch (fx.ampPreset) {
-        AmpPreset.none || AmpPreset.clean => 0.0,
+      // Mini Amp: Gain/Drive → SoLoud wave-shaper (audible saturation).
+      final base = switch (fx.ampPreset) {
+        AmpPreset.none => 0.0,
+        AmpPreset.clean => 0.08,
         AmpPreset.crunch => 0.35,
         AmpPreset.highGain => 0.7,
-        AmpPreset.bassDrive => 0.4,
+        AmpPreset.bassDrive => 0.42,
       };
+      final amount = (base + gain * 0.85).clamp(0.0, 0.95);
       src.filters.waveShaperFilter.amount(soundHandle: handle).value =
           amount.clamp(-1.0, 1.0);
       src.filters.waveShaperFilter.wet(soundHandle: handle).value =
-          amount > 0.01 ? 0.85 : 0.0;
+          amount > 0.03 ? (0.45 + gain * 0.5).clamp(0.0, 0.95) : 0.0;
 
+      // Mini Amp: Tone/Brightness → biquad low-pass cutoff.
+      // Cab sim darkens further (speaker cabinet approximation).
+      if (src.filters.biquadFilter.isActive) {
+        final toneHz = 500.0 + tone * 7500.0;
+        final cabHz = cab ? toneHz * 0.55 : toneHz;
+        src.filters.biquadFilter.type(soundHandle: handle).value = 0; // LOWPASS
+        src.filters.biquadFilter.frequency(soundHandle: handle).value =
+            cabHz.clamp(120.0, 12000.0);
+        src.filters.biquadFilter.resonance(soundHandle: handle).value =
+            cab ? 1.4 : 0.7;
+        src.filters.biquadFilter.wet(soundHandle: handle).value =
+            (tone < 0.92 || cab) ? 0.85 : 0.35;
+      }
+
+      // Reverb + optional cab-room (does not overwrite user reverb field).
+      var wetReverb = reverb;
+      var damp = 0.35 + (1 - reverb) * 0.3;
+      var room = 0.45 + reverb * 0.45;
+      if (cab) {
+        wetReverb = (reverb + 0.22).clamp(0.0, 0.85);
+        damp = (0.72 + (1 - tone) * 0.2).clamp(0.4, 0.95);
+        room = (room * 0.7 + 0.25).clamp(0.2, 0.85);
+      }
       if (src.filters.freeverbFilter.isActive) {
-        src.filters.freeverbFilter.wet(soundHandle: handle).value = reverb;
-        src.filters.freeverbFilter.roomSize(soundHandle: handle).value =
-            0.45 + reverb * 0.45;
+        src.filters.freeverbFilter.wet(soundHandle: handle).value = wetReverb;
+        src.filters.freeverbFilter.roomSize(soundHandle: handle).value = room;
         try {
-          src.filters.freeverbFilter.damp(soundHandle: handle).value =
-              0.35 + (1 - reverb) * 0.3;
+          src.filters.freeverbFilter.damp(soundHandle: handle).value = damp;
         } catch (_) {}
-      } else if (reverb > 0.05) {
+      } else if (wetReverb > 0.05) {
         final wet = src.filters.echoFilter.wet(soundHandle: handle).value;
         src.filters.echoFilter.wet(soundHandle: handle).value =
-            (wet + reverb * 0.35).clamp(0.0, 0.9);
+            (wet + wetReverb * 0.35).clamp(0.0, 0.9);
         src.filters.echoFilter.decay(soundHandle: handle).value =
-            (0.3 + reverb * 0.45).clamp(0.0, 0.95);
+            (0.3 + wetReverb * 0.45).clamp(0.0, 0.95);
       }
     } catch (e) {
       debugPrint('applyVoiceFx skipped: $e');

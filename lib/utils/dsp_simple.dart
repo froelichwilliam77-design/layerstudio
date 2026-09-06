@@ -47,4 +47,25 @@ class SimpleDsp {
       }
     }
   }
+
+  /// Soft drive / saturation for offline amp (mirrors live wave-shaper intent).
+  static void applyDrive(List<double> buf, {required double amount}) {
+    if (amount < 0.03) return;
+    final drive = 1.0 + amount * 6.0;
+    for (var i = 0; i < buf.length; i++) {
+      final x = (buf[i] * drive).clamp(-20.0, 20.0);
+      final e = math.exp(2.0 * x);
+      buf[i] = (e - 1.0) / (e + 1.0);
+    }
+  }
+
+  /// Darken highs for cab-sim (one-pole low-pass).
+  static void applyCabLowpass(List<double> buf, {double brightness = 0.55}) {
+    final cutoff = 0.08 + brightness.clamp(0.0, 1.0) * 0.35;
+    var state = 0.0;
+    for (var i = 0; i < buf.length; i++) {
+      state += cutoff * (buf[i] - state);
+      buf[i] = state;
+    }
+  }
 }

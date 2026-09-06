@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../data/sound_library.dart';
 import '../models/project.dart';
+import '../models/fx_settings.dart';
 import '../models/track.dart';
 import '../utils/dsp_simple.dart';
 import '../utils/music_theory.dart';
@@ -91,12 +92,25 @@ class ExportService {
           final s = pcm[idx] * (1 - frac) + pcm[idx + 1] * frac;
           noteBuf[i] = _softClip(s * vel, track.fx.ampPreset.name);
         }
+        // Mini Amp Sim (offline): tone → EQ shelves, gain → drive, cab → LP.
+        final tone = track.fx.tone.clamp(0.0, 1.0);
         SimpleDsp.applyEq(
           noteBuf,
-          low: track.fx.eqLow,
+          low: (track.fx.eqLow + (1 - tone) * 0.25).clamp(-1.0, 1.0),
           mid: track.fx.eqMid,
-          high: track.fx.eqHigh,
+          high: (track.fx.eqHigh + (tone * 2 - 1) * 0.55).clamp(-1.0, 1.0),
         );
+        final driveAmt = switch (track.fx.ampPreset) {
+          AmpPreset.none => track.fx.gain * 0.35,
+          AmpPreset.clean => 0.1 + track.fx.gain * 0.45,
+          AmpPreset.crunch => 0.35 + track.fx.gain * 0.45,
+          AmpPreset.highGain => 0.55 + track.fx.gain * 0.4,
+          AmpPreset.bassDrive => 0.3 + track.fx.gain * 0.5,
+        };
+        SimpleDsp.applyDrive(noteBuf, amount: driveAmt.clamp(0.0, 1.0));
+        if (track.fx.cabSim) {
+          SimpleDsp.applyCabLowpass(noteBuf, brightness: tone);
+        }
         SimpleDsp.applyCompressor(noteBuf, amount: track.fx.comp);
         for (var i = 0; i < noteBuf.length; i++) {
           final dest = startSample + i;

@@ -980,6 +980,31 @@ class StudioController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Sync Mini Amp Sim knobs into EQ shelves used by export; live path reads
+  /// gain/tone/cabSim directly in AudioEngine._applyVoiceFx.
+  void updateTrackFx(Track track, {FxSettings? fx}) {
+    if (fx != null) track.fx = fx;
+    final f = track.fx;
+    final tone = f.tone.clamp(0.0, 1.0);
+    f.eqHigh = (tone * 2 - 1).clamp(-1.0, 1.0);
+    f.eqLow = ((1 - tone) * 0.35 - 0.15).clamp(-1.0, 1.0);
+    // Nudge amp preset from gain for bass/guitar so wave-shaper has a base.
+    if (track.category == TrackCategory.bass ||
+        track.category == TrackCategory.guitar) {
+      if (f.gain > 0.62 &&
+          (f.ampPreset == AmpPreset.clean || f.ampPreset == AmpPreset.none)) {
+        f.ampPreset = track.category == TrackCategory.bass
+            ? AmpPreset.bassDrive
+            : AmpPreset.crunch;
+      } else if (f.gain < 0.22 &&
+          (f.ampPreset == AmpPreset.crunch ||
+              f.ampPreset == AmpPreset.bassDrive)) {
+        f.ampPreset = AmpPreset.clean;
+      }
+    }
+    notifyListeners();
+  }
+
   void seek(int step) {
     final p = project;
     playheadStep = step;

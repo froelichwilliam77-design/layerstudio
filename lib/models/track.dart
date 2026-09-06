@@ -9,6 +9,7 @@ enum TrackInstrumentMode {
   pianoRoll,
   keyboard,
   guitarChords,
+  fretboard,
   micRecord,
 }
 
@@ -63,7 +64,7 @@ class Track {
     if (instrumentMode != null) return instrumentMode!;
     return switch (category) {
       TrackCategory.drums => TrackInstrumentMode.stepSeq,
-      TrackCategory.bass => TrackInstrumentMode.pianoRoll,
+      TrackCategory.bass => TrackInstrumentMode.fretboard,
       TrackCategory.guitar => TrackInstrumentMode.guitarChords,
       TrackCategory.keys => TrackInstrumentMode.keyboard,
       TrackCategory.mic => TrackInstrumentMode.micRecord,
