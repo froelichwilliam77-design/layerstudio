@@ -84,13 +84,15 @@ jobs:
           if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" == v* ]]; then
             TAG="${GITHUB_REF_NAME}"
           else
-            TAG="v1.0.1"
+            VER=$(grep -E '^version:' pubspec.yaml | head -1 | awk '{print $2}' | cut -d+ -f1)
+            VER=${VER:-1.1.0}
+            TAG="v${VER}"
             if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" >/dev/null 2>&1; then
               n=1
-              while gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/v1.0.1-${n}" >/dev/null 2>&1; do
+              while gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/v${VER}-${n}" >/dev/null 2>&1; do
                 n=$((n + 1))
               done
-              TAG="v1.0.1-${n}"
+              TAG="v${VER}-${n}"
             fi
           fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"

@@ -5,20 +5,34 @@ class AudioClockMath {
   /// Seconds per 16th-note step at [bpm] (quarter note = 4 steps).
   static double secondsPerStep(int bpm) => (60.0 / bpm.clamp(1, 999)) / 4.0;
 
-  /// Musical time in seconds for a step index.
+  /// Musical time in seconds for a step index (no swing).
   static double stepToSeconds(int step, int bpm) =>
       step * secondsPerStep(bpm);
 
-  /// Floor step from continuous musical time (seconds).
+  /// Floor step from continuous musical time (seconds), ignoring swing.
   static int secondsToStep(double seconds, int bpm) {
     final sps = secondsPerStep(bpm);
     if (sps <= 0) return 0;
     return (seconds / sps).floor();
   }
 
+  /// True for even 16ths that receive swing delay (odd 0-based indices:
+  /// steps 1,3,5… = the 2nd/4th 16th of each beat).
+  static bool isSwungStep(int step) => step % 2 == 1;
+
+  /// Delay in seconds applied to a swung (even) 16th.
+  /// [swingPercent] 0 = straight; 100 = delay by a full half-step (triplet-ish).
+  static double swingDelaySeconds(int step, int swingPercent, int bpm) {
+    if (!isSwungStep(step)) return 0;
+    final amount = swingPercent.clamp(0, 100) / 100.0;
+    return amount * secondsPerStep(bpm) * 0.5;
+  }
+
+  /// Absolute musical onset time for [step] including swing.
+  static double stepOnsetSeconds(int step, int bpm, int swingPercent) =>
+      stepToSeconds(step, bpm) + swingDelaySeconds(step, swingPercent, bpm);
+
   /// Map continuous time into a looped step range.
-  /// Returns (step, loopedSecondsAnchor) where loopedSecondsAnchor is the
-  /// musical-time origin after wrapping (for resetting the audio clock).
   static ({int step, double wrappedSeconds, bool didWrap}) mapLoop({
     required double musicalSeconds,
     required int bpm,
@@ -45,7 +59,6 @@ class AudioClockMath {
   }
 
   /// Steps that should be scheduled in a lookahead window.
-  /// Inclusive of [fromStepExclusive]+1 through [toStepInclusive].
   static List<int> stepsInLookahead({
     required int fromStepExclusive,
     required int toStepInclusive,
@@ -69,6 +82,69 @@ class AudioClockMath {
         out.add(step);
       }
     }
+    return out;
+  }
+
+  /// Given transport time [nowSec] and lookahead, return steps whose swung
+  /// onset falls in (scheduledThroughOnset, nowSec+lookahead].
+  static List<({int step, double onset})> swungStepsInWindow({
+    required double nowSec,
+    required double lookaheadSec,
+    required int bpm,
+    required int swingPercent,
+    required double scheduledThroughOnset,
+    required bool loopEnabled,
+    required int loopStartStep,
+    required int loopEndStep,
+  }) {
+    final horizon = nowSec + lookaheadSec;
+    // Scan a generous step range covering the window.
+    final fromStep = secondsToStep(nowSec, bpm) - 2;
+    final toStep = secondsToStep(horizon, bpm) + 4;
+    final candidates = stepsInLookahead(
+      fromStepExclusive: fromStep - 1,
+      toStepInclusive: toStep,
+      loopEnabled: loopEnabled,
+      loopStartStep: loopStartStep,
+      loopEndStep: loopEndStep,
+    );
+    final out = <({int step, double onset})>[];
+    for (final step in candidates) {
+      // Reconstruct absolute onset in unwrapped time near [nowSec].
+      final base = stepToSeconds(step, bpm);
+      // Align to nearest loop cycle around now.
+      var onset = base + swingDelaySeconds(step, swingPercent, bpm);
+      if (loopEnabled) {
+        final loopStart = loopStartStep;
+        final loopEnd = loopEndStep <= loopStart ? loopStart + 1 : loopEndStep;
+        final loopLen = loopEnd - loopStart;
+        final loopDur = loopLen * secondsPerStep(bpm);
+        if (loopDur > 0) {
+          final loopOrigin = stepToSeconds(loopStart, bpm);
+          // Place onset in the same cycle window as now.
+          while (onset < nowSec - loopDur) {
+            onset += loopDur;
+          }
+          while (onset > nowSec + loopDur) {
+            onset -= loopDur;
+          }
+          // Prefer onset inside [loopOrigin + k*loopDur ...] near now
+          final k = ((nowSec - loopOrigin) / loopDur).floor();
+          final local = (step - loopStart) % loopLen;
+          onset = loopOrigin +
+              k * loopDur +
+              local * secondsPerStep(bpm) +
+              swingDelaySeconds(step, swingPercent, bpm);
+          if (onset < nowSec - 0.001) {
+            onset += loopDur;
+          }
+        }
+      }
+      if (onset > scheduledThroughOnset && onset <= horizon) {
+        out.add((step: step, onset: onset));
+      }
+    }
+    out.sort((a, b) => a.onset.compareTo(b.onset));
     return out;
   }
 }

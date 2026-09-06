@@ -6,6 +6,7 @@ class NoteEvent {
     required this.startStep,
     this.lengthSteps = 1,
     this.velocity = 100,
+    this.probability = 100,
   });
 
   final String id;
@@ -22,12 +23,16 @@ class NoteEvent {
   /// 1–127
   int velocity;
 
+  /// 0–100 chance this note fires when its step is reached (default 100).
+  int probability;
+
   NoteEvent copyWith({
     String? id,
     int? pitch,
     int? startStep,
     int? lengthSteps,
     int? velocity,
+    int? probability,
   }) {
     return NoteEvent(
       id: id ?? this.id,
@@ -35,6 +40,7 @@ class NoteEvent {
       startStep: startStep ?? this.startStep,
       lengthSteps: lengthSteps ?? this.lengthSteps,
       velocity: velocity ?? this.velocity,
+      probability: probability ?? this.probability,
     );
   }
 
@@ -44,6 +50,7 @@ class NoteEvent {
         'startStep': startStep,
         'lengthSteps': lengthSteps,
         'velocity': velocity,
+        'probability': probability,
       };
 
   factory NoteEvent.fromJson(Map<String, dynamic> json) => NoteEvent(
@@ -52,5 +59,6 @@ class NoteEvent {
         startStep: json['startStep'] as int,
         lengthSteps: (json['lengthSteps'] as int?) ?? 1,
         velocity: (json['velocity'] as int?) ?? 100,
+        probability: (json['probability'] as int?) ?? 100,
       );
 }

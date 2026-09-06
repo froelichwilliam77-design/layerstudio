@@ -8,6 +8,12 @@ class MusicTheory {
   static const majorIntervals = [0, 2, 4, 5, 7, 9, 11];
   static const minorIntervals = [0, 2, 3, 5, 7, 8, 10];
 
+  /// Soft clamp window for rate-based pitching (±12). Beyond this, UI warns.
+  static const int softPitchRangeSemis = 12;
+
+  /// Hard clamp for playback rate (±24) to avoid extreme SoLoud artifacts.
+  static const int hardPitchRangeSemis = 24;
+
   static String noteName(int midi) {
     final name = pitchNames[midi % 12];
     final octave = (midi ~/ 12) - 1;
@@ -49,4 +55,20 @@ class MusicTheory {
 
   static double pitchRatio(int fromMidi, int toMidi) =>
       math.pow(2, (toMidi - fromMidi) / 12.0).toDouble();
+
+  /// Clamp [midi] to [rootMidi] ± [hardPitchRangeSemis].
+  static int clampPitch(int midi, int rootMidi) {
+    final lo = rootMidi - hardPitchRangeSemis;
+    final hi = rootMidi + hardPitchRangeSemis;
+    return midi.clamp(lo, hi);
+  }
+
+  static bool exceedsSoftRange(int midi, int rootMidi) {
+    final d = (midi - rootMidi).abs();
+    return d > softPitchRangeSemis;
+  }
+
+  static bool wasHardClamped(int requested, int rootMidi) {
+    return clampPitch(requested, rootMidi) != requested;
+  }
 }

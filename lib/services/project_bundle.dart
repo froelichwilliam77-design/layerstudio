@@ -45,6 +45,8 @@ class ProjectBundleService {
 
     for (final track in project.tracks) {
       await embed(track.sampleRoot);
+      final rec = track.recordedFilePath;
+      if (rec != null && rec.isNotEmpty) await embed(rec);
       final preset = SoundLibrary.byId(track.presetId);
       final kit = preset?.drumKit;
       if (kit != null) {

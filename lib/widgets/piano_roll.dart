@@ -40,6 +40,14 @@ class _PianoRollState extends State<PianoRoll> {
 
     return Column(
       children: [
+        if (c.pitchWarning != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+            child: Text(
+              c.pitchWarning!,
+              style: const TextStyle(fontSize: 11, color: StudioColors.danger),
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
           child: Row(

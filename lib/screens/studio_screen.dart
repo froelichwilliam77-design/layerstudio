@@ -123,6 +123,7 @@ class StudioScreen extends StatelessWidget {
       TrackCategory.bass => StudioTab.piano,
       TrackCategory.guitar => StudioTab.guitar,
       TrackCategory.keys => StudioTab.keys,
+      TrackCategory.mic => StudioTab.arrange,
     };
   }
 

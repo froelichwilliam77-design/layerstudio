@@ -12,10 +12,6 @@ typedef AudioInterruptionCallback = void Function({required bool began});
 typedef AudioBecomingNoisyCallback = void Function();
 
 /// Low-latency sample playback via flutter_soloud (SoLoud).
-///
-/// Transport timing uses [AudioEngine.transportSeconds] (Stopwatch anchored at
-/// play) as the sequencer source of truth; a short Timer only polls for UI +
-/// lookahead scheduling — it does not define when notes fire.
 class AudioEngine {
   AudioEngine._();
   static final AudioEngine instance = AudioEngine._();
@@ -34,11 +30,12 @@ class AudioEngine {
   AudioInterruptionCallback? onInterruption;
   AudioBecomingNoisyCallback? onBecomingNoisy;
 
-  /// Monotonic transport clock (audio-side). Null when stopped/paused.
   Stopwatch? _transportWatch;
   double _transportOriginSeconds = 0;
 
-  /// Seconds of musical transport time since play (or seek) anchor.
+  static const metronomeClick = 'assets/samples/drums/metronome_click.wav';
+  static const metronomeAccent = 'assets/samples/drums/metronome_accent.wav';
+
   double get transportSeconds {
     final w = _transportWatch;
     if (w == null || !w.isRunning) {
@@ -50,12 +47,10 @@ class AudioEngine {
   bool get isTransportRunning =>
       _transportWatch != null && _transportWatch!.isRunning;
 
-  /// Initialize audio session + SoLoud device. Call once at app start.
   Future<void> init() async {
     if (_ready) return;
     try {
       await _configureSession();
-      // Smaller buffer = lower latency for pads/sequencer (see SoLoud metronome docs).
       await _soloud.init(
         bufferSize: 1024,
         channels: Channels.stereo,
@@ -88,7 +83,41 @@ class AudioEngine {
     }
   }
 
-  /// Request audio focus / activate session before playback.
+  /// Switch to a play-and-record friendly session while mic arm is active.
+  Future<void> configureForRecording() async {
+    try {
+      final session = _session ?? await AudioSession.instance;
+      await session.configure(
+        AudioSessionConfiguration(
+          avAudioSessionCategory: AVAudioSessionCategory.playAndRecord,
+          avAudioSessionCategoryOptions:
+              AVAudioSessionCategoryOptions.defaultToSpeaker |
+                  AVAudioSessionCategoryOptions.allowBluetooth,
+          avAudioSessionMode: AVAudioSessionMode.defaultMode,
+          androidAudioAttributes: const AndroidAudioAttributes(
+            contentType: AndroidAudioContentType.music,
+            usage: AndroidAudioUsage.media,
+          ),
+          androidAudioFocusGainType: AndroidAudioFocusGainType.gain,
+          androidWillPauseWhenDucked: true,
+        ),
+      );
+      await session.setActive(true);
+    } catch (e) {
+      debugPrint('configureForRecording failed: $e');
+    }
+  }
+
+  Future<void> configureForMusic() async {
+    try {
+      final session = _session ?? await AudioSession.instance;
+      await session.configure(const AudioSessionConfiguration.music());
+      await session.setActive(true);
+    } catch (e) {
+      debugPrint('configureForMusic failed: $e');
+    }
+  }
+
   Future<void> activateSession() async {
     try {
       await (_session ?? await AudioSession.instance).setActive(true);
@@ -103,13 +132,11 @@ class AudioEngine {
     } catch (_) {}
   }
 
-  /// Start or resume the transport clock at [originSeconds] musical time.
   void startTransportClock({double originSeconds = 0}) {
     _transportOriginSeconds = originSeconds;
     _transportWatch = Stopwatch()..start();
   }
 
-  /// Pause transport clock; keeps current musical time as origin.
   void pauseTransportClock() {
     final w = _transportWatch;
     if (w != null && w.isRunning) {
@@ -118,14 +145,12 @@ class AudioEngine {
     }
   }
 
-  /// Stop and reset transport clock to [originSeconds].
   void stopTransportClock({double originSeconds = 0}) {
     _transportWatch?.stop();
     _transportWatch = null;
     _transportOriginSeconds = originSeconds;
   }
 
-  /// Re-anchor clock without stopping (e.g. after loop wrap or seek while playing).
   void seekTransportClock(double originSeconds) {
     _transportOriginSeconds = originSeconds;
     if (_transportWatch != null) {
@@ -187,13 +212,13 @@ class AudioEngine {
     for (final p in paths) {
       await loadAsset(p);
     }
+    await loadAsset(metronomeClick);
+    await loadAsset(metronomeAccent);
   }
 
-  /// Activate insert FX on an [AudioSource] once (Echo + WaveShaper; Freeverb if possible).
   void _prepareSourceFx(AudioSource src, String key) {
     if (_fxPrepared.contains(key)) return;
     try {
-      // Clear legacy global filters so live mix is per-source.
       try {
         _soloud.filters.freeverbFilter.deactivate();
       } catch (_) {}
@@ -203,11 +228,10 @@ class AudioEngine {
 
       src.filters.echoFilter.activate();
       src.filters.waveShaperFilter.activate();
-      // Freeverb needs stereo sources; bundled WAVs are mono — activate may fail.
       try {
         src.filters.freeverbFilter.activate();
       } catch (e) {
-        debugPrint('Freeverb insert skipped for $key (likely mono): $e');
+        debugPrint('Freeverb insert skipped for $key: $e');
       }
       _fxPrepared.add(key);
     } catch (e) {
@@ -221,7 +245,6 @@ class AudioEngine {
       final delay = fx.delay.clamp(0.0, 1.0);
       final reverb = fx.reverb.clamp(0.0, 1.0);
 
-      // Per-handle echo = delay send.
       src.filters.echoFilter.delay(soundHandle: handle).value =
           0.18 + delay * 0.45;
       src.filters.echoFilter.decay(soundHandle: handle).value =
@@ -229,7 +252,6 @@ class AudioEngine {
       src.filters.echoFilter.wet(soundHandle: handle).value =
           (delay * 0.75).clamp(0.0, 0.85);
 
-      // Amp via waveshaper amount (0 = clean, higher = drive).
       final amount = switch (fx.ampPreset) {
         AmpPreset.none || AmpPreset.clean => 0.0,
         AmpPreset.crunch => 0.35,
@@ -241,13 +263,15 @@ class AudioEngine {
       src.filters.waveShaperFilter.wet(soundHandle: handle).value =
           amount > 0.01 ? 0.85 : 0.0;
 
-      // Freeverb per-handle when the insert is active (stereo sources).
       if (src.filters.freeverbFilter.isActive) {
         src.filters.freeverbFilter.wet(soundHandle: handle).value = reverb;
         src.filters.freeverbFilter.roomSize(soundHandle: handle).value =
             0.45 + reverb * 0.45;
+        try {
+          src.filters.freeverbFilter.damp(soundHandle: handle).value =
+              0.35 + (1 - reverb) * 0.3;
+        } catch (_) {}
       } else if (reverb > 0.05) {
-        // Mono pack fallback: blend a little extra echo wet as "space".
         final wet = src.filters.echoFilter.wet(soundHandle: handle).value;
         src.filters.echoFilter.wet(soundHandle: handle).value =
             (wet + reverb * 0.35).clamp(0.0, 0.9);
@@ -259,8 +283,6 @@ class AudioEngine {
     }
   }
 
-  /// Play a one-shot sample. [pitchMidi]/[rootMidi] set playback rate for pitch.
-  /// [fx] applies per-voice insert params when SoLoud allows.
   Future<SoundHandle?> playSample(
     String assetPath, {
     double volume = 1.0,
@@ -282,7 +304,8 @@ class AudioEngine {
         pan: pan.clamp(-1.0, 1.0),
       );
       if (pitchMidi != null && pitchMidi != rootMidi) {
-        final ratio = MusicTheory.pitchRatio(rootMidi, pitchMidi);
+        final clamped = MusicTheory.clampPitch(pitchMidi, rootMidi);
+        final ratio = MusicTheory.pitchRatio(rootMidi, clamped);
         _soloud.setRelativePlaySpeed(handle, ratio.clamp(0.25, 4.0));
       }
       _applyVoiceFx(src, handle, fx);
@@ -291,6 +314,13 @@ class AudioEngine {
       debugPrint('playSample error: $e');
       return null;
     }
+  }
+
+  Future<void> playMetronomeClick({required bool accent}) async {
+    await playSample(
+      accent ? metronomeAccent : metronomeClick,
+      volume: accent ? 0.85 : 0.55,
+    );
   }
 
   Future<void> stopAll() async {
@@ -302,34 +332,5 @@ class AudioEngine {
         }
       }
     } catch (_) {}
-  }
-
-  /// Legacy global FX — kept for offline-debug / fallback; live path uses inserts.
-  @Deprecated('Use per-source playSample(..., fx:) instead')
-  void applyGlobalFx({required double reverb, required double delay}) {
-    if (!_ready) return;
-    try {
-      if (reverb > 0.01) {
-        _soloud.filters.freeverbFilter.activate();
-        _soloud.filters.freeverbFilter.wet.value = reverb.clamp(0.0, 1.0);
-        _soloud.filters.freeverbFilter.roomSize.value = 0.5 + reverb * 0.4;
-      } else {
-        try {
-          _soloud.filters.freeverbFilter.deactivate();
-        } catch (_) {}
-      }
-      if (delay > 0.01) {
-        _soloud.filters.echoFilter.activate();
-        _soloud.filters.echoFilter.delay.value = 0.2 + delay * 0.4;
-        _soloud.filters.echoFilter.decay.value = 0.3 + delay * 0.4;
-        _soloud.filters.echoFilter.wet.value = delay.clamp(0.0, 0.8);
-      } else {
-        try {
-          _soloud.filters.echoFilter.deactivate();
-        } catch (_) {}
-      }
-    } catch (e) {
-      debugPrint('FX apply skipped: $e');
-    }
   }
 }

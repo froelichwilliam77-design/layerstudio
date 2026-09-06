@@ -1,0 +1,60 @@
+name: Build iOS (unsigned)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/**'
+      - 'ios/**'
+      - 'pubspec.yaml'
+      - '.github/workflows/build-ios.yml'
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.35.0'
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build iOS without codesign
+        run: flutter build ios --release --no-codesign
+
+      - name: Stage artifact
+        run: |
+          mkdir -p dist
+          # Flutter outputs under build/ios/iphoneos/Runner.app when --no-codesign
+          if [ -d build/ios/iphoneos/Runner.app ]; then
+            ditto -c -k --sequesterRsrc --keepParent build/ios/iphoneos/Runner.app dist/LayerStudio-ios-unsigned.app.zip
+          else
+            find build/ios -maxdepth 3 -type d -name 'Runner.app' -print
+            ditto -c -k --sequesterRsrc --keepParent build/ios/iphoneos dist/LayerStudio-ios-build.zip || \
+              tar -czf dist/LayerStudio-ios-build.tgz -C build ios
+          fi
+          ls -lh dist/
+
+      - name: Upload unsigned iOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LayerStudio-ios-unsigned
+          path: dist/*
+          if-no-files-found: warn
+
+      - name: Reminder
+        run: |
+          echo "Unsigned build only. TestFlight / App Store upload requires Apple Developer certs,"
+          echo "provisioning profiles, and a separate signing pipeline — not faked by this workflow."
