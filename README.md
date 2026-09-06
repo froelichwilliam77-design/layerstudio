@@ -3,6 +3,12 @@
 **Beat-maker first** phone music studio (Flutter mobile DAW).  
 Make drums and groove excellent inside a lean DAW shell — piano/guitar stay available, but we are **not** expanding toward a full BandLab clone (no AI drummer, live-loops marketplace, cloud sync, Autotune, etc.).
 
+## What’s new in 1.1.8
+
+- **12 drum kits** (trap/boom-bap/drill/lo-fi/house/techno/synthwave/electro + rock/indie/brush/punk) with improved procedural samples
+- **Stereo melodic samples** (bass/guitar/keys) so live Freeverb activates
+- **Multi-root pitch banks** — nearest root + residual rate-pitch (less stretch)
+
 ## What’s new in 1.1.0
 
 1. **Swing** (0–100%) delays even 16ths in the audio-clock scheduler  
@@ -50,12 +56,12 @@ Make drums and groove excellent inside a lean DAW shell — piano/guitar stay av
 ### Sample licenses
 
 `assets/samples/` = original synthetic WAVs via `tool/generate_samples.py` — **CC0**.  
-**12 drum kits** (trap/boom-bap/drill/lo-fi/house/techno/synthwave/electro + rock/indie/brush/punk). Drums are **stereo**; melodic packs are mono.
+**12 drum kits** (trap/boom-bap/drill/lo-fi/house/techno/synthwave/electro + rock/indie/brush/punk). Drums **and melodic** packs are **stereo** (Freeverb-friendly). Melodic presets ship multi-root banks.
 
 ## Known limits
 
-- **Pitch:** SoLoud uses playback-rate pitching. Notes are hard-clamped to ±24 semitones from the sample root; UI warns beyond ±12. Extreme stretches still sound artificial.
-- **Reverb:** Freeverb needs stereo sources — works on drum kits; mono melodic voices may fall back to echo “space.” Not a convolution hall.
+- **Pitch:** SoLoud uses playback-rate pitching. Melodic presets pick the **nearest multi-root** sample then rate-pitch residual semis (less stretch than a single root). Notes are hard-clamped to ±24 semitones past the outer roots; UI warns beyond ±12 from the nearest root.
+- **Reverb:** Freeverb needs stereo sources — drums and melodic samples are stereo so Freeverb can activate. Not a convolution hall.
 - **Mic record:** Armed-track capture from playhead, not sample-accurate punch-in / overdub.
 - **Song arrange:** Simple clip list (pattern + start bar + length), not a full DAW playlist editor.
 - **MP3 export:** Not in-app.
@@ -90,7 +96,7 @@ python3 tool/generate_samples.py
 
 ```
 lib/ models/ data/ services/ screens/ widgets/ theme/ utils/
-assets/samples/   # drums (stereo) / bass / guitar / keys
+assets/samples/   # drums (stereo, 12 kits) / bass / guitar / keys (stereo multi-root)
 tool/generate_samples.py
 PRIVACY.md  STORE.md
 ```

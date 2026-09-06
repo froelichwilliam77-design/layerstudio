@@ -62,6 +62,7 @@ class ExportService {
       for (final note in track.notes) {
         String asset = track.sampleRoot;
         var rootMidi = track.rootMidi;
+        var playPitch = note.pitch;
         if (track.category == TrackCategory.drums && kit != null) {
           final pad = DrumPadMap.padIndexForPitch(note.pitch);
           final names = kit.keys.toList();
@@ -69,6 +70,11 @@ class ExportService {
             asset = kit[names[pad]]!;
             rootMidi = note.pitch; // 1:1, no pitch shift for drums
           }
+        } else if (track.category != TrackCategory.mic && preset != null) {
+          playPitch = preset.clampMidi(note.pitch);
+          final resolved = preset.resolveRoot(playPitch);
+          asset = resolved.path;
+          rootMidi = resolved.rootMidi;
         }
 
         final pcm = await loadPcm(asset);
@@ -79,7 +85,7 @@ class ExportService {
         final vel = (note.velocity / 127.0) * track.volume;
         final ratio = track.category == TrackCategory.drums
             ? 1.0
-            : MusicTheory.pitchRatio(rootMidi, note.pitch).clamp(0.25, 4.0);
+            : MusicTheory.pitchRatio(rootMidi, playPitch).clamp(0.25, 4.0);
 
         // Simple resample by rate into a note buffer, then FX, then mix
         final outLen = (pcm.length / ratio).floor();

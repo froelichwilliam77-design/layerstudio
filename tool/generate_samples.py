@@ -2,8 +2,9 @@
 """Regenerate LayerStudio synthetic WAV sample pack (CC0).
 
 All drum/melodic samples are procedurally generated — no third-party packs.
-Drum samples are **stereo** so SoLoud Freeverb inserts can activate.
-Melodic samples remain mono (pitch-rate playback).
+Drum samples are **stereo** (12 kits via build_kits) so SoLoud Freeverb inserts
+can activate. Melodic samples are also **stereo multi-root** banks so playback
+can pick the nearest root and rate-pitch only residual semis.
 """
 from __future__ import annotations
 
@@ -15,6 +16,20 @@ import wave
 
 SR = 44100
 ROOT = os.path.join(os.path.dirname(__file__), '..', 'assets', 'samples')
+
+
+def midi_to_freq(midi: int) -> float:
+    return 440.0 * (2.0 ** ((midi - 69) / 12.0))
+
+
+def midi_to_name(midi: int) -> str:
+    names = ['c', 'c#', 'd', 'd#', 'e', 'f', 'f#', 'g', 'g#', 'a', 'a#', 'b']
+    # Prefer flat-free names used in existing assets (c2, e2, …).
+    pc = midi % 12
+    octave = (midi // 12) - 1
+    # Map sharps to names matching existing files (no sharps in our roots).
+    return f'{names[pc]}{octave}'
+
 
 
 def write_wav(path, samples, sr=SR, stereo=False):
@@ -370,6 +385,31 @@ def write_drum(path, mono, pan=0.0, width=0.15):
     write_wav(path, to_stereo(mono, pan, width), stereo=True)
 
 
+def write_stereo(path, mono, pan=0.0, width=0.12):
+    """Write mono buffer as stereo WAV (melodic multi-root helper)."""
+    write_wav(path, to_stereo(mono, pan=pan, width=width), stereo=True)
+
+
+def bass_clean(freq):
+    clean = tone(freq, 0.8, 'sine', 0.02, 0.6, 0.55)
+    clean2 = tone(freq * 2, 0.8, 'sine', 0.02, 0.4, 0.15)
+    return [a + b for a, b in zip(clean, clean2)]
+
+
+def bass_driven(freq):
+    return [math.tanh(s * 3) * 0.7 for s in tone(freq, 0.55, 'saw', 0.01, 0.5, 0.45)]
+
+
+def bass_808(freq):
+    n = int(SR * 1.2)
+    out = []
+    for i in range(n):
+        t = i / SR
+        f = freq * (1 + 0.5 * math.exp(-t * 8))
+        out.append(math.sin(2 * math.pi * f * t) * math.exp(-t * 1.2) * 0.9)
+    return out
+
+
 # ---------- kit builders ----------
 
 def build_kits(base: str):
@@ -477,30 +517,39 @@ def build_kits(base: str):
 
 
 def build_melodic(base: str):
-    clean = tone(65.41, 0.8, 'sine', 0.02, 0.6, 0.55)
-    clean2 = tone(130.82, 0.8, 'sine', 0.02, 0.4, 0.15)
-    write_wav(f'{base}/bass/bass_clean_c2.wav', [a + b for a, b in zip(clean, clean2)])
-    driven = [math.tanh(s * 3) * 0.7 for s in tone(65.41, 0.55, 'saw', 0.01, 0.5, 0.45)]
-    write_wav(f'{base}/bass/bass_driven_c2.wav', driven)
-    n = int(SR * 1.2)
-    b808 = []
-    for i in range(n):
-        t = i / SR
-        f = 55.0 * (1 + 0.5 * math.exp(-t * 8))
-        b808.append(math.sin(2 * math.pi * f * t) * math.exp(-t * 1.2) * 0.9)
-    write_wav(f'{base}/bass/bass_808_c2.wav', b808)
+    # Bass roots: C1(24), C2(36), C3(48) — keep *_c2.wav as primary.
+    bass_roots = [24, 36, 48]
+    for midi in bass_roots:
+        name = midi_to_name(midi)
+        f = midi_to_freq(midi)
+        write_stereo(f'{base}/bass/bass_clean_{name}.wav', bass_clean(f), 0.0)
+        write_stereo(f'{base}/bass/bass_driven_{name}.wav', bass_driven(f), 0.05)
+        write_stereo(f'{base}/bass/bass_808_{name}.wav', bass_808(f), 0.0)
 
-    write_wav(f'{base}/guitar/clean_e2.wav', pluck(82.41, 1.2, 0.5))
-    write_wav(
-        f'{base}/guitar/crunch_e2.wav',
-        [math.tanh(s * 4) * 0.55 for s in pluck(82.41, 1.0, 0.35)],
-    )
-    write_wav(
-        f'{base}/guitar/highgain_e2.wav',
-        [math.tanh(s * 8) * 0.5 for s in pluck(82.41, 0.9, 0.25)],
-    )
-    write_wav(f'{base}/keys/piano_c4.wav', pianoish(261.63))
-    write_wav(f'{base}/keys/pad_c4.wav', softpad(261.63))
+    # Guitar roots: E1(28), E2(40), E3(52)
+    gtr_roots = [28, 40, 52]
+    for midi in gtr_roots:
+        name = midi_to_name(midi)
+        f = midi_to_freq(midi)
+        write_stereo(f'{base}/guitar/clean_{name}.wav', pluck(f, 1.2, 0.5), 0.08)
+        write_stereo(
+            f'{base}/guitar/crunch_{name}.wav',
+            [math.tanh(s * 4) * 0.55 for s in pluck(f, 1.0, 0.35)],
+            0.1,
+        )
+        write_stereo(
+            f'{base}/guitar/highgain_{name}.wav',
+            [math.tanh(s * 8) * 0.5 for s in pluck(f, 0.9, 0.25)],
+            0.12,
+        )
+
+    # Keys roots: C3(48), C4(60), C5(72)
+    key_roots = [48, 60, 72]
+    for midi in key_roots:
+        name = midi_to_name(midi)
+        f = midi_to_freq(midi)
+        write_stereo(f'{base}/keys/piano_{name}.wav', pianoish(f), 0.0)
+        write_stereo(f'{base}/keys/pad_{name}.wav', softpad(f), -0.05)
 
 
 def main():
@@ -509,8 +558,15 @@ def main():
     build_kits(base)
     build_melodic(base)
     drum_files = sorted(f for f in os.listdir(f'{base}/drums') if f.endswith('.wav'))
+    melodic = []
+    for sub in ('bass', 'guitar', 'keys'):
+        d = os.path.join(base, sub)
+        melodic.extend(sorted(f for f in os.listdir(d) if f.endswith('.wav')))
     total = sum(os.path.getsize(f'{base}/drums/{f}') for f in drum_files)
-    print(f'Wrote {len(drum_files)} drum WAVs ({total / 1024:.0f} KiB) + melodic under {base}')
+    print(
+        f'Wrote {len(drum_files)} drum WAVs ({total / 1024:.0f} KiB) + '
+        f'{len(melodic)} stereo multi-root melodic under {base}'
+    )
 
 
 if __name__ == '__main__':

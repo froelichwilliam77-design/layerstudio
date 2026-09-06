@@ -6,10 +6,10 @@ via tool/generate_samples.py.
 License: CC0 1.0 Universal (public domain dedication).
 No third-party sample packs are included.
 
-Drum kit samples (assets/samples/drums/*.wav) are stereo (2-channel) so live
-SoLoud Freeverb inserts can activate. Melodic bass/guitar/keys samples remain
-mono; reverb on those voices may fall back to echo wet when Freeverb cannot
-attach.
+Drum and melodic samples (bass/guitar/keys) are stereo (2-channel) so live
+SoLoud Freeverb inserts can activate. Melodic presets also include multi-root
+banks (e.g. bass C1/C2/C3, guitar E1/E2/E3, keys C3/C4/C5) so playback can
+pick the nearest root and rate-pitch only residual semitones.
 
 Drum kits (12): Trap Heat, Boom Bap Classic, Drill Dark, Lo-Fi Chill,
 House Pulse, Techno Drive, Synthwave Neon, Club Electro, Acoustic Rock,

@@ -111,10 +111,7 @@ class StudioController extends ChangeNotifier {
   Future<void> bootstrap() async {
     await AudioEngine.instance.init();
     await AudioEngine.instance.preload(
-      SoundLibrary.all.expand((p) {
-        if (p.drumKit != null) return p.drumKit!.values;
-        return [p.samplePath];
-      }),
+      SoundLibrary.all.expand((p) => p.allSamplePaths),
     );
     recent = await _store.listProjects();
     try {
@@ -573,11 +570,24 @@ class StudioController extends ChangeNotifier {
     }
     if (track.category != TrackCategory.drums &&
         track.category != TrackCategory.mic) {
-      final clamped = MusicTheory.clampPitch(finalPitch, track.rootMidi);
-      if (MusicTheory.exceedsSoftRange(finalPitch, track.rootMidi) ||
-          clamped != finalPitch) {
+      final preset = SoundLibrary.byId(track.presetId);
+      final int clamped;
+      if (preset != null) {
+        clamped = preset.clampMidi(finalPitch);
+      } else {
+        clamped = MusicTheory.clampPitch(finalPitch, track.rootMidi);
+      }
+      if (clamped != finalPitch) {
+        // Red banner only when we actually hard-clamp outside bank coverage.
         pitchWarning =
-            'Pitch clamped to ±${MusicTheory.hardPitchRangeSemis} semitones of sample root (SoLoud rate-pitch).';
+            'Pitch clamped to multi-root bank range (±${MusicTheory.hardPitchRangeSemis} semis past outer roots; SoLoud rate-pitch).';
+      } else if (preset != null && preset.exceedsSoftRange(finalPitch)) {
+        pitchWarning =
+            'Far from nearest sample root — tone may stretch (SoLoud rate-pitch).';
+      } else if (preset == null &&
+          (MusicTheory.exceedsSoftRange(finalPitch, track.rootMidi))) {
+        pitchWarning =
+            'Pitch far from sample root (SoLoud rate-pitch).';
       } else {
         pitchWarning = null;
       }
@@ -743,7 +753,9 @@ class StudioController extends ChangeNotifier {
     }
     if (track.category != TrackCategory.drums &&
         track.category != TrackCategory.mic) {
-      finalPitch = MusicTheory.clampPitch(finalPitch, track.rootMidi);
+      final preset = SoundLibrary.byId(track.presetId);
+      finalPitch = preset?.clampMidi(finalPitch) ??
+          MusicTheory.clampPitch(finalPitch, track.rootMidi);
     }
     final snapped = (startStep ~/ snapSteps) * snapSteps;
     track.notes.removeWhere(
@@ -910,13 +922,18 @@ class StudioController extends ChangeNotifier {
       );
       return;
     }
-    final clamped = MusicTheory.clampPitch(midi, track.rootMidi);
+    final preset = SoundLibrary.byId(track.presetId);
+    final clamped = preset?.clampMidi(midi) ??
+        MusicTheory.clampPitch(midi, track.rootMidi);
+    final resolved =
+        preset?.resolveRoot(clamped) ??
+        (path: track.sampleRoot, rootMidi: track.rootMidi);
     await AudioEngine.instance.playSample(
-      track.sampleRoot,
+      resolved.path,
       volume: track.volume * (velocity ?? 1.0),
       pan: track.pan,
       pitchMidi: clamped,
-      rootMidi: track.rootMidi,
+      rootMidi: resolved.rootMidi,
       fx: track.fx,
     );
   }

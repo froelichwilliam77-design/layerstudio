@@ -1,5 +1,13 @@
 import '../models/track.dart';
 
+/// One pitched root sample in a multi-root bank.
+class SoundRoot {
+  const SoundRoot({required this.midi, required this.samplePath});
+
+  final int midi;
+  final String samplePath;
+}
+
 class SoundPreset {
   const SoundPreset({
     required this.id,
@@ -10,18 +18,85 @@ class SoundPreset {
     required this.rootMidi,
     required this.colorValue,
     this.drumKit,
+    this.roots,
   });
 
   final String id;
   final String name;
   final TrackCategory category;
   final String description;
+
+  /// Primary / default sample (backward compatible).
   final String samplePath;
+
+  /// MIDI note of [samplePath].
   final int rootMidi;
   final int colorValue;
 
   /// For drum kits: pad name → asset path.
   final Map<String, String>? drumKit;
+
+  /// Optional multi-root bank for melodic presets.
+  final List<SoundRoot>? roots;
+
+  /// Nearest root sample for [midi] by absolute semitone distance.
+  /// Falls back to [samplePath] / [rootMidi] when [roots] is empty/null.
+  ({String path, int rootMidi}) resolveRoot(int midi) {
+    final bank = roots;
+    if (bank == null || bank.isEmpty) {
+      return (path: samplePath, rootMidi: rootMidi);
+    }
+    SoundRoot best = bank.first;
+    var bestDist = (midi - best.midi).abs();
+    for (var i = 1; i < bank.length; i++) {
+      final r = bank[i];
+      final d = (midi - r.midi).abs();
+      if (d < bestDist) {
+        best = r;
+        bestDist = d;
+      }
+    }
+    return (path: best.samplePath, rootMidi: best.midi);
+  }
+
+  /// Hard playable MIDI span: bank [min,max] ± 24, or primary root ± 24.
+  ({int lo, int hi}) get pitchHardRange {
+    final bank = roots;
+    if (bank == null || bank.isEmpty) {
+      return (lo: rootMidi - 24, hi: rootMidi + 24);
+    }
+    var minM = bank.first.midi;
+    var maxM = bank.first.midi;
+    for (final r in bank) {
+      if (r.midi < minM) minM = r.midi;
+      if (r.midi > maxM) maxM = r.midi;
+    }
+    return (lo: minM - 24, hi: maxM + 24);
+  }
+
+  /// Clamp [midi] into the multi-root bank hard range (or primary ±24).
+  int clampMidi(int midi) {
+    final r = pitchHardRange;
+    if (midi < r.lo) return r.lo;
+    if (midi > r.hi) return r.hi;
+    return midi;
+  }
+
+  /// True when [midi] is farther than ±12 semis from the nearest root.
+  /// Inside a multi-root bank (octave spacing) this is rare — residual ≤ 6.
+  bool exceedsSoftRange(int midi) {
+    final resolved = resolveRoot(midi);
+    return (midi - resolved.rootMidi).abs() > 12;
+  }
+
+  /// All asset paths that should be preloaded for this preset.
+  Iterable<String> get allSamplePaths {
+    if (drumKit != null) return drumKit!.values;
+    if (roots != null && roots!.isNotEmpty) {
+      return roots!.map((r) => r.samplePath);
+    }
+    return [samplePath];
+  }
 }
 
 /// Built-in library (synthetic samples — see assets/samples/LICENSE).
@@ -221,7 +296,7 @@ class SoundLibrary {
         'Tom': 'assets/samples/drums/punk_tom.wav',
       },
     ),
-    // Bass
+    // Bass — roots C1 / C2 / C3
     SoundPreset(
       id: 'bass_clean',
       name: 'Clean Finger Bass',
@@ -230,6 +305,11 @@ class SoundLibrary {
       samplePath: 'assets/samples/bass/bass_clean_c2.wav',
       rootMidi: 36, // C2
       colorValue: 0xFF00D4FF,
+      roots: [
+        SoundRoot(midi: 24, samplePath: 'assets/samples/bass/bass_clean_c1.wav'),
+        SoundRoot(midi: 36, samplePath: 'assets/samples/bass/bass_clean_c2.wav'),
+        SoundRoot(midi: 48, samplePath: 'assets/samples/bass/bass_clean_c3.wav'),
+      ],
     ),
     SoundPreset(
       id: 'bass_driven',
@@ -239,6 +319,11 @@ class SoundLibrary {
       samplePath: 'assets/samples/bass/bass_driven_c2.wav',
       rootMidi: 36,
       colorValue: 0xFF00B8D4,
+      roots: [
+        SoundRoot(midi: 24, samplePath: 'assets/samples/bass/bass_driven_c1.wav'),
+        SoundRoot(midi: 36, samplePath: 'assets/samples/bass/bass_driven_c2.wav'),
+        SoundRoot(midi: 48, samplePath: 'assets/samples/bass/bass_driven_c3.wav'),
+      ],
     ),
     SoundPreset(
       id: 'bass_808',
@@ -248,8 +333,13 @@ class SoundLibrary {
       samplePath: 'assets/samples/bass/bass_808_c2.wav',
       rootMidi: 36,
       colorValue: 0xFF0097A7,
+      roots: [
+        SoundRoot(midi: 24, samplePath: 'assets/samples/bass/bass_808_c1.wav'),
+        SoundRoot(midi: 36, samplePath: 'assets/samples/bass/bass_808_c2.wav'),
+        SoundRoot(midi: 48, samplePath: 'assets/samples/bass/bass_808_c3.wav'),
+      ],
     ),
-    // Guitar
+    // Guitar — roots E1 / E2 / E3
     SoundPreset(
       id: 'gtr_clean',
       name: 'Clean Guitar',
@@ -258,6 +348,11 @@ class SoundLibrary {
       samplePath: 'assets/samples/guitar/clean_e2.wav',
       rootMidi: 40, // E2
       colorValue: 0xFF9B6BFF,
+      roots: [
+        SoundRoot(midi: 28, samplePath: 'assets/samples/guitar/clean_e1.wav'),
+        SoundRoot(midi: 40, samplePath: 'assets/samples/guitar/clean_e2.wav'),
+        SoundRoot(midi: 52, samplePath: 'assets/samples/guitar/clean_e3.wav'),
+      ],
     ),
     SoundPreset(
       id: 'gtr_crunch',
@@ -267,6 +362,11 @@ class SoundLibrary {
       samplePath: 'assets/samples/guitar/crunch_e2.wav',
       rootMidi: 40,
       colorValue: 0xFFB388FF,
+      roots: [
+        SoundRoot(midi: 28, samplePath: 'assets/samples/guitar/crunch_e1.wav'),
+        SoundRoot(midi: 40, samplePath: 'assets/samples/guitar/crunch_e2.wav'),
+        SoundRoot(midi: 52, samplePath: 'assets/samples/guitar/crunch_e3.wav'),
+      ],
     ),
     SoundPreset(
       id: 'gtr_high',
@@ -276,8 +376,13 @@ class SoundLibrary {
       samplePath: 'assets/samples/guitar/highgain_e2.wav',
       rootMidi: 40,
       colorValue: 0xFF7C4DFF,
+      roots: [
+        SoundRoot(midi: 28, samplePath: 'assets/samples/guitar/highgain_e1.wav'),
+        SoundRoot(midi: 40, samplePath: 'assets/samples/guitar/highgain_e2.wav'),
+        SoundRoot(midi: 52, samplePath: 'assets/samples/guitar/highgain_e3.wav'),
+      ],
     ),
-    // Keys
+    // Keys — roots C3 / C4 / C5
     SoundPreset(
       id: 'keys_piano',
       name: 'Studio Piano',
@@ -286,6 +391,11 @@ class SoundLibrary {
       samplePath: 'assets/samples/keys/piano_c4.wav',
       rootMidi: 60, // C4
       colorValue: 0xFF2EE6A6,
+      roots: [
+        SoundRoot(midi: 48, samplePath: 'assets/samples/keys/piano_c3.wav'),
+        SoundRoot(midi: 60, samplePath: 'assets/samples/keys/piano_c4.wav'),
+        SoundRoot(midi: 72, samplePath: 'assets/samples/keys/piano_c5.wav'),
+      ],
     ),
     SoundPreset(
       id: 'keys_pad',
@@ -295,6 +405,11 @@ class SoundLibrary {
       samplePath: 'assets/samples/keys/pad_c4.wav',
       rootMidi: 60,
       colorValue: 0xFF66D9A8,
+      roots: [
+        SoundRoot(midi: 48, samplePath: 'assets/samples/keys/pad_c3.wav'),
+        SoundRoot(midi: 60, samplePath: 'assets/samples/keys/pad_c4.wav'),
+        SoundRoot(midi: 72, samplePath: 'assets/samples/keys/pad_c5.wav'),
+      ],
     ),
   ];
 
