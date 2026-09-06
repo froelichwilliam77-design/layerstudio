@@ -65,7 +65,10 @@ assets/samples/    # drums / bass / guitar / keys WAV packs
 
 ## Run
 
+Clone and run from the **repository root** (`pubspec.yaml` is at the root — do not `cd` into a nested `layerstudio` folder):
+
 ```bash
+git clone https://github.com/froelichwilliam77-design/layerstudio.git
 cd layerstudio
 flutter pub get
 flutter run            # pick a device / simulator
@@ -76,13 +79,15 @@ flutter run -d <deviceId>
 ### Open in Android Studio
 
 1. Install Flutter & Dart plugins
-2. **Open** the `layerstudio` folder (not only `android/`)
+2. **Open** the repository root (the folder that contains `pubspec.yaml`, not only `android/`)
 3. Wait for Gradle sync → Run on emulator or device
 
 ### Open in Xcode (iOS)
 
+From the repository root:
+
 ```bash
-cd layerstudio/ios
+cd ios
 pod install   # if needed
 open Runner.xcworkspace
 ```
@@ -116,33 +121,27 @@ Projects autosave about every 20s under the app documents directory (`layerstudi
 
 ## License
 
-App source: use freely for learning and personal projects.  
-Samples: CC0 (see above).
+- **App source:** [MIT](LICENSE) — Copyright (c) 2026 William Froelich
+- **Samples** under `assets/samples/`: [CC0 / public domain](assets/samples/LICENSE) (see Sample licenses above)
 
 
 ## GitHub
 
-Target repository: `https://github.com/froelichwilliam77-design/music-maker.` (literal repo name includes a trailing period)
-
-If the remote is empty, from a machine with `gh` auth:
+Repository: [`https://github.com/froelichwilliam77-design/layerstudio`](https://github.com/froelichwilliam77-design/layerstudio)
 
 ```bash
-gh repo create froelichwilliam77-design/music-maker. --public --source=. --remote=origin --push
-# or, if the empty repo already exists:
-git init
-git add .
-git commit -m "Initial LayerStudio Flutter MVP"
-git branch -M main
-git remote add origin https://github.com/froelichwilliam77-design/music-maker..git
-git push -u origin main
+git clone https://github.com/froelichwilliam77-design/layerstudio.git
+cd layerstudio
+flutter pub get
+flutter run
 ```
 
-### Regenerate samples / skipped binaries
+Releases / source: https://github.com/froelichwilliam77-design/layerstudio
 
-WAV sample binaries, Android/iOS launcher PNGs, and `gradle-wrapper.jar` are **not** in this GitHub push (text-only MCP uploads). Regenerate samples before running:
+If you need to regenerate synthetic sample WAVs locally:
 
 ```bash
 python3 tool/generate_samples.py
 ```
 
-That writes CC0 synthetic WAVs under `assets/samples/`. For launcher icons / `gradle-wrapper.jar`, run `flutter create .` in this folder (keeps existing files) or copy from a Flutter template.
+That writes CC0 synthetic WAVs under `assets/samples/`.
