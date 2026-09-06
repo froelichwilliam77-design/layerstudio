@@ -1,0 +1,128 @@
+name: Build Android APK Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.35.0'
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build universal release APK
+        run: flutter build apk --release
+
+      - name: Build split-per-ABI release APKs
+        run: flutter build apk --release --split-per-abi
+
+      - name: Stage renamed APKs
+        run: |
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk dist/LayerStudio.apk
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk dist/LayerStudio-arm64.apk
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk dist/LayerStudio-armv7.apk
+          ls -lh dist/
+
+      - name: Resolve release tag
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" == v* ]]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            # Prefer v0.1.1 unless that tag already exists; then bump patch
+            TAG="v0.1.1"
+            if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" >/dev/null 2>&1; then
+              # Find next free patch under v0.1.x
+              n=1
+              while gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/v0.1.${n}" >/dev/null 2>&1; do
+                n=$((n + 1))
+              done
+              TAG="v0.1.${n}"
+            fi
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Resolved release tag: ${TAG}"
+
+      - name: Create GitHub Release with APKs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.tag.outputs.tag }}"
+          SHA="${GITHUB_SHA}"
+          SHORT_SHA="${SHA:0:7}"
+
+          NOTES="$(cat <<NOTESEOF
+          # LayerStudio ${TAG}
+
+          Debug/testing sideload builds (Android debug keystore signing — not Play Store ready).
+
+          Built from commit \`${SHORT_SHA}\` (\`${SHA}\`) on branch/ref \`${GITHUB_REF_NAME}\`.
+
+          ## Downloads
+          - **LayerStudio.apk** — universal (all ABIs) — use if unsure
+          - **LayerStudio-arm64.apk** — most modern phones (arm64-v8a)
+          - **LayerStudio-armv7.apk** — older 32-bit phones (armeabi-v7a)
+
+          ## Install
+          1. Download the APK on your Android phone
+          2. Open it and allow install from unknown sources if prompted
+          3. Open **LayerStudio**
+
+          Same install steps as v0.1.0.
+          NOTESEOF
+          )"
+
+          # Dedent: strip leading indentation from heredoc
+          NOTES="$(printf '%s\n' "$NOTES" | sed 's/^          //')"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists; uploading/updating assets"
+            gh release upload "$TAG" \
+              dist/LayerStudio.apk \
+              dist/LayerStudio-arm64.apk \
+              dist/LayerStudio-armv7.apk \
+              --clobber
+            gh release edit "$TAG" --notes "$NOTES" || true
+          else
+            gh release create "$TAG" \
+              dist/LayerStudio.apk \
+              dist/LayerStudio-arm64.apk \
+              dist/LayerStudio-armv7.apk \
+              --title "LayerStudio ${TAG} — Android APKs" \
+              --notes "$NOTES" \
+              --target "$SHA"
+          fi
+
+          echo "Release URL: https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
