@@ -1,7 +1,25 @@
 # LayerStudio
 
-**Beat-maker first** phone music studio (Flutter mobile DAW).  
-Make drums and groove excellent inside a lean DAW shell — piano/guitar stay available, but we are **not** expanding toward a full BandLab clone (no AI drummer, live-loops marketplace, cloud sync, Autotune, etc.).
+**Beat-maker-first phone music studio** — a lean Flutter DAW for making drums and grooves that feel good, then stacking bass / keys / guitar, mixing, and exporting.
+
+[![CI](https://github.com/froelichwilliam77-design/layerstudio/actions/workflows/ci.yml/badge.svg)](https://github.com/froelichwilliam77-design/layerstudio/actions/workflows/ci.yml)
+
+> Program a beat with swing and step probability · layer instruments · mix with per-track FX · export **stereo dithered WAV** or a portable `.layerstudio` project. Offline. No account.
+
+### Why it exists
+Most phone “studios” chase BandLab-scale features. LayerStudio stays focused: **excellent beat-making** inside a small DAW shell. Piano/guitar are available; we are **not** building AI drummer, live-loops marketplace, cloud sync, or Autotune.
+
+### Snapshot (1.1.10)
+| | |
+|---|---|
+| Drums | 12 procedural kits (trap → punk), pads + 16-step, swing, probability |
+| Layers | Bass / keys / guitar with multi-root samples + live Freeverb |
+| Structure | Pattern bank A–D, song arrange, undo/redo |
+| Share | Stereo 16-bit WAV (TPDF dither) · `.layerstudio` project zip |
+| Platforms | Android (signed APK via CI when secrets set) · iOS unsigned CI artifact |
+
+**Try it:** clone → `flutter pub get` → `flutter run` (see [Run](#run)). Screenshots / demo GIF welcome in PRs — drop them under `docs/` and link here.
+
 
 ## What’s new in 1.1.10
 
