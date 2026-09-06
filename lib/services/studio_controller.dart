@@ -74,6 +74,10 @@ class StudioController extends ChangeNotifier {
   int snapSteps = 1;
   int drawProbability = 100;
 
+  /// Active paint-stroke undo batch (piano roll / step grid drag-paint).
+  String? _strokeTrackId;
+  Map<String, List<dynamic>>? _strokeBefore;
+
   /// Soft pitch warning for UI banner.
   String? pitchWarning;
 
@@ -695,6 +699,135 @@ class StudioController extends ChangeNotifier {
         if (n.pitch == pitch && n.startStep == step) {
           n.velocity = velocity.clamp(1, 127);
         }
+      }
+    });
+  }
+
+  NoteEvent? findNote(Track track, int pitch, int startStep) {
+    for (final n in track.notes) {
+      if (n.pitch == pitch && n.startStep == startStep) return n;
+    }
+    return null;
+  }
+
+  /// Begin a batched undo stroke for drag-paint on [trackId].
+  void beginNoteStroke(String trackId) {
+    if (_strokeTrackId != null) {
+      endNoteStroke();
+    }
+    final p = project;
+    if (p == null) return;
+    _strokeTrackId = trackId;
+    _strokeBefore = _snapshotTrackNotes(trackId);
+  }
+
+  /// Force a cell on/off during an active paint stroke (no per-cell undo).
+  void paintNoteCell({
+    required String trackId,
+    required int pitch,
+    required int startStep,
+    required bool on,
+    int lengthSteps = 1,
+    int? velocity,
+    int? probability,
+  }) {
+    final p = project;
+    if (p == null) return;
+    final track = p.tracks.firstWhere((t) => t.id == trackId);
+    var finalPitch = pitch;
+    if (scaleLock &&
+        track.category != TrackCategory.drums &&
+        track.category != TrackCategory.mic &&
+        tab != StudioTab.drums) {
+      finalPitch = MusicTheory.snapToScale(pitch, p.key, p.scale);
+    }
+    if (track.category != TrackCategory.drums &&
+        track.category != TrackCategory.mic) {
+      finalPitch = MusicTheory.clampPitch(finalPitch, track.rootMidi);
+    }
+    final snapped = (startStep ~/ snapSteps) * snapSteps;
+    track.notes.removeWhere(
+      (n) => n.pitch == finalPitch && n.startStep == snapped,
+    );
+    if (on) {
+      track.notes.add(NoteEvent(
+        id: _uuid.v4(),
+        pitch: finalPitch,
+        startStep: snapped,
+        lengthSteps: lengthSteps,
+        velocity: velocity ?? drawVelocity,
+        probability: probability ?? drawProbability,
+      ));
+    }
+    notifyListeners();
+  }
+
+  /// Force a drum step on/off during an active paint stroke.
+  void paintStepCell({
+    required String trackId,
+    required int padIndex,
+    required int step,
+    required bool on,
+  }) {
+    final p = project;
+    if (p == null) return;
+    final track = p.tracks.firstWhere((t) => t.id == trackId);
+    final pitch = DrumPadMap.pitchForPad(padIndex);
+    track.notes.removeWhere((n) => n.pitch == pitch && n.startStep == step);
+    if (on) {
+      track.notes.add(NoteEvent(
+        id: _uuid.v4(),
+        pitch: pitch,
+        startStep: step,
+        lengthSteps: 1,
+        velocity: drawVelocity,
+        probability: drawProbability,
+      ));
+    }
+    notifyListeners();
+  }
+
+  /// Commit the active paint stroke as a single undoable command.
+  void endNoteStroke({String label = 'Paint notes'}) {
+    final trackId = _strokeTrackId;
+    final before = _strokeBefore;
+    _strokeTrackId = null;
+    _strokeBefore = null;
+    if (trackId == null || before == null || project == null) return;
+    final after = _snapshotTrackNotes(trackId);
+    final beforeJson = before[trackId] ?? const [];
+    final afterJson = after[trackId] ?? const [];
+    if (beforeJson.toString() == afterJson.toString()) return;
+    commands.push(
+      NotesSnapshotCommand(
+        label: label,
+        apply: _applyTrackNotesSnapshot,
+        before: before,
+        after: after,
+      ),
+      executeNow: false,
+    );
+    _flushNotesToActivePattern();
+    notifyListeners();
+  }
+
+  /// Per-note parameter lock (velocity / length / probability).
+  void setNoteParams({
+    required String trackId,
+    required String noteId,
+    int? velocity,
+    int? lengthSteps,
+    int? probability,
+  }) {
+    final p = project;
+    if (p == null) return;
+    _pushNotesEdit('Note params', trackId, () {
+      final track = p.tracks.firstWhere((t) => t.id == trackId);
+      for (final n in track.notes) {
+        if (n.id != noteId) continue;
+        if (velocity != null) n.velocity = velocity.clamp(1, 127);
+        if (lengthSteps != null) n.lengthSteps = lengthSteps.clamp(1, 64);
+        if (probability != null) n.probability = probability.clamp(0, 100);
       }
     });
   }
