@@ -9,6 +9,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
@@ -24,6 +28,9 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -37,7 +44,10 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Decode upload keystore (if secret present)
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Decode upload keystore (required)
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -45,35 +55,40 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          if [[ -n "${ANDROID_KEYSTORE_BASE64:-}" && -n "${ANDROID_KEYSTORE_PASSWORD:-}" && -n "${ANDROID_KEY_ALIAS:-}" && -n "${ANDROID_KEY_PASSWORD:-}" ]]; then
-            echo "Release signing secrets detected — writing keystore + key.properties"
-            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/upload-keystore.jks
-            {
-              echo "storePassword=${ANDROID_KEYSTORE_PASSWORD}"
-              echo "keyPassword=${ANDROID_KEY_PASSWORD}"
-              echo "keyAlias=${ANDROID_KEY_ALIAS}"
-              echo "storeFile=app/upload-keystore.jks"
-            } > android/key.properties
-            echo "SIGNING_MODE=release" >> "$GITHUB_ENV"
-          else
-            echo "WARNING: ANDROID_KEYSTORE_* secrets not fully set — APK will use debug signing fallback."
-            echo "SIGNING_MODE=debug-fallback" >> "$GITHUB_ENV"
+          missing=()
+          [[ -n "${ANDROID_KEYSTORE_BASE64:-}" ]] || missing+=("ANDROID_KEYSTORE_BASE64")
+          [[ -n "${ANDROID_KEYSTORE_PASSWORD:-}" ]] || missing+=("ANDROID_KEYSTORE_PASSWORD")
+          [[ -n "${ANDROID_KEY_ALIAS:-}" ]] || missing+=("ANDROID_KEY_ALIAS")
+          [[ -n "${ANDROID_KEY_PASSWORD:-}" ]] || missing+=("ANDROID_KEY_PASSWORD")
+          if ((${#missing[@]} > 0)); then
+            echo "ERROR: Missing required signing secrets: ${missing[*]}"
+            echo "This release workflow does not fall back to debug signing."
+            exit 1
           fi
-
-      - name: Build universal release APK
-        run: flutter build apk --release
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/upload-keystore.jks
+          echo "storePassword=${ANDROID_KEYSTORE_PASSWORD}" > android/key.properties
+          echo "keyPassword=${ANDROID_KEY_PASSWORD}" >> android/key.properties
+          echo "keyAlias=${ANDROID_KEY_ALIAS}" >> android/key.properties
+          echo "storeFile=upload-keystore.jks" >> android/key.properties
 
       - name: Build split-per-ABI release APKs
         run: flutter build apk --release --split-per-abi
 
       - name: Stage renamed APKs
         run: |
+          set -euo pipefail
           mkdir -p dist
-          cp build/app/outputs/flutter-apk/app-release.apk dist/LayerStudio.apk
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk dist/LayerStudio-arm64.apk
           cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk dist/LayerStudio-armv7.apk
+          # Recommended default download = arm64 (avoid a second full universal compile)
+          cp dist/LayerStudio-arm64.apk dist/LayerStudio.apk
           ls -lh dist/
-          echo "Signing mode: ${SIGNING_MODE:-unknown}"
+
+      - name: Cleanup signing files
+        if: always()
+        run: |
+          rm -f android/app/upload-keystore.jks android/key.properties
+          echo "Removed keystore and key.properties"
 
       - name: Resolve release tag
         id: tag
@@ -106,25 +121,20 @@ jobs:
           TAG="${{ steps.tag.outputs.tag }}"
           SHA="${GITHUB_SHA}"
           SHORT_SHA="${SHA:0:7}"
-          SIGNING="${SIGNING_MODE:-unknown}"
-
-          if [[ "$SIGNING" == "release" ]]; then
-            SIGN_NOTE="Release-signed with the upload keystore (sideload / internal distribution — not Play Store published by this workflow)."
-          else
-            SIGN_NOTE="WARNING: Built with **debug signing fallback** (upload keystore secrets were missing)."
-          fi
 
           NOTES="$(cat <<NOTESEOF
           # LayerStudio ${TAG}
 
-          ${SIGN_NOTE}
+          Release-signed with the upload keystore (sideload / internal distribution — not Play Store published by this workflow).
 
           Built from commit \`${SHORT_SHA}\` (\`${SHA}\`) on branch/ref \`${GITHUB_REF_NAME}\`.
 
           ## Downloads
-          - **LayerStudio.apk** — universal (all ABIs) — use if unsure
+          - **LayerStudio.apk** — recommended default (same file as arm64; avoids a second full compile)
           - **LayerStudio-arm64.apk** — most modern phones (arm64-v8a)
           - **LayerStudio-armv7.apk** — older 32-bit phones (armeabi-v7a)
+
+          Built with \`flutter build apk --release --split-per-abi\` only (no separate universal build).
 
           ## Install
           1. Download the APK on your Android phone
@@ -142,7 +152,7 @@ jobs:
               dist/LayerStudio-arm64.apk \
               dist/LayerStudio-armv7.apk \
               --clobber
-            gh release edit "$TAG" --notes "$NOTES" || true
+            gh release edit "$TAG" --notes "$NOTES"
           else
             gh release create "$TAG" \
               dist/LayerStudio.apk \
