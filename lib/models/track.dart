@@ -152,3 +152,23 @@ class Track {
         recordedFilePath: json['recordedFilePath'] as String?,
       );
 }
+
+
+extension TrackCategoryUi on TrackCategory {
+  String get shortLabel => switch (this) {
+        TrackCategory.drums => 'Drums',
+        TrackCategory.bass => 'Bass',
+        TrackCategory.guitar => 'Guitar',
+        TrackCategory.keys => 'Keys',
+        TrackCategory.mic => 'Mic',
+      };
+
+  /// Primary beat-making surface vs supporting melodic/harmonic layers.
+  bool get isBeatPrimary => this == TrackCategory.drums;
+
+  bool get isLayer =>
+      this == TrackCategory.bass ||
+      this == TrackCategory.guitar ||
+      this == TrackCategory.keys ||
+      this == TrackCategory.mic;
+}
