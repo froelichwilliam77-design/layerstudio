@@ -53,6 +53,52 @@ class MusicTheory {
     ];
   }
 
+  /// Build a chord voicing for expressive strum / songwriting.
+  ///
+  /// - [sus4] replaces the third with a perfect fourth.
+  /// - [seventh] adds a dominant 7th (+10) for major, minor 7th (+10) for minor.
+  /// - [inversion] rotates the voicing upward (0 = root position).
+  static List<int> chordVoicing(
+    int rootMidi, {
+    bool minor = false,
+    bool seventh = false,
+    bool sus4 = false,
+    int inversion = 0,
+  }) {
+    final thirdOrSus = sus4 ? 5 : (minor ? 3 : 4);
+    final notes = <int>[
+      rootMidi,
+      rootMidi + thirdOrSus,
+      rootMidi + 7,
+    ];
+    if (seventh) {
+      notes.add(rootMidi + 10);
+    }
+    var inv = inversion;
+    if (inv < 0) inv = 0;
+    final maxInv = notes.length - 1;
+    if (inv > maxInv) inv = maxInv;
+    for (var i = 0; i < inv; i++) {
+      final n = notes.removeAt(0);
+      notes.add(n + 12);
+    }
+    return notes;
+  }
+
+  /// Short chord-quality suffix for labels (e.g. `m7`, `sus4`, `7`).
+  static String chordSuffix({
+    bool minor = false,
+    bool seventh = false,
+    bool sus4 = false,
+  }) {
+    if (sus4 && seventh) return minor ? 'm7sus4' : '7sus4';
+    if (sus4) return 'sus4';
+    if (minor && seventh) return 'm7';
+    if (minor) return 'm';
+    if (seventh) return '7';
+    return '';
+  }
+
   static double pitchRatio(int fromMidi, int toMidi) =>
       math.pow(2, (toMidi - fromMidi) / 12.0).toDouble();
 
