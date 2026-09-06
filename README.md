@@ -3,6 +3,11 @@
 **Beat-maker first** phone music studio (Flutter mobile DAW).  
 Make drums and groove excellent inside a lean DAW shell — piano/guitar stay available, but we are **not** expanding toward a full BandLab clone (no AI drummer, live-loops marketplace, cloud sync, Autotune, etc.).
 
+## What’s new in 1.1.10
+
+- **Stereo dithered WAV export** — mixdown keeps L/R (drums + melodic Freeverb space), applies track pan, peak-normalizes, then **TPDF dither** before 16-bit stereo PCM (optional 24-bit encode path)
+- Share sheet still uses `share_plus` on the exported `.wav`
+
 ## What’s new in 1.1.9
 
 - **Tighter clocked scheduling** — sequencer / metronome oneshots schedule to swung onset (delay) instead of firing immediately when the step enters the lookahead window
@@ -42,7 +47,7 @@ Make drums and groove excellent inside a lean DAW shell — piano/guitar stay av
 | Mixer + live per-track FX | Working (see Known limits) |
 | Mic arm → record take → playback | Working (not sample-accurate punch-in) |
 | Local save + `.layerstudio` import/export | Working |
-| Export WAV share | Working |
+| Export WAV share | Working (stereo 16-bit TPDF dithered) |
 | Export MP3 | Stubbed |
 | CI analyze + test | Working |
 | Android release-signed APKs | Working (when secrets set) |
@@ -71,7 +76,8 @@ Make drums and groove excellent inside a lean DAW shell — piano/guitar stay av
 - **Reverb:** Freeverb needs stereo sources — drums and melodic samples are stereo so Freeverb can activate. Not a convolution hall.
 - **Mic record:** Armed-track capture from playhead, not sample-accurate punch-in / overdub.
 - **Song arrange:** Simple clip list (pattern + start bar + length), not a full DAW playlist editor.
-- **MP3 export:** Not in-app.
+- **WAV export:** Offline mixdown is **stereo 16-bit @ 44.1 kHz with TPDF dither** (optional 24-bit). Stereo samples stay stereo; track pan is applied. Offline FX are still a simplified EQ/drive/cab/comp + crude delay/reverb taps — not full live Echo/WaveShaper/Freeverb parity.
+- **MP3 export:** Still stubbed / not in-app.
 - **Store submission:** Not done — see `STORE.md`. TestFlight needs Apple certs (iOS workflow uploads **unsigned** artifacts only).
 
 ## Privacy
