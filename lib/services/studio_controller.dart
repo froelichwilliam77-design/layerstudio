@@ -95,8 +95,8 @@ class StudioController extends ChangeNotifier {
   double _scheduledThroughOnset = -1;
   final Set<String> _firedKeys = {};
 
-  /// Lookahead window for note oneshots (~40ms).
-  static const double _lookaheadSec = 0.04;
+  /// Lookahead window for clocked oneshots (~60ms Timer headroom).
+  static const double _lookaheadSec = 0.06;
 
   Track? get selectedTrack {
     final p = project;
@@ -111,10 +111,7 @@ class StudioController extends ChangeNotifier {
   Future<void> bootstrap() async {
     await AudioEngine.instance.init();
     await AudioEngine.instance.preload(
-      SoundLibrary.all.expand((p) {
-        if (p.drumKit != null) return p.drumKit!.values;
-        return [p.samplePath];
-      }),
+      SoundLibrary.all.expand((p) => p.allSamplePaths),
     );
     recent = await _store.listProjects();
     try {
@@ -573,11 +570,24 @@ class StudioController extends ChangeNotifier {
     }
     if (track.category != TrackCategory.drums &&
         track.category != TrackCategory.mic) {
-      final clamped = MusicTheory.clampPitch(finalPitch, track.rootMidi);
-      if (MusicTheory.exceedsSoftRange(finalPitch, track.rootMidi) ||
-          clamped != finalPitch) {
+      final preset = SoundLibrary.byId(track.presetId);
+      final int clamped;
+      if (preset != null) {
+        clamped = preset.clampMidi(finalPitch);
+      } else {
+        clamped = MusicTheory.clampPitch(finalPitch, track.rootMidi);
+      }
+      if (clamped != finalPitch) {
+        // Red banner only when we actually hard-clamp outside bank coverage.
         pitchWarning =
-            'Pitch clamped to ±${MusicTheory.hardPitchRangeSemis} semitones of sample root (SoLoud rate-pitch).';
+            'Pitch clamped to multi-root bank range (±${MusicTheory.hardPitchRangeSemis} semis past outer roots; SoLoud rate-pitch).';
+      } else if (preset != null && preset.exceedsSoftRange(finalPitch)) {
+        pitchWarning =
+            'Far from nearest sample root — tone may stretch (SoLoud rate-pitch).';
+      } else if (preset == null &&
+          (MusicTheory.exceedsSoftRange(finalPitch, track.rootMidi))) {
+        pitchWarning =
+            'Pitch far from sample root (SoLoud rate-pitch).';
       } else {
         pitchWarning = null;
       }
@@ -743,7 +753,9 @@ class StudioController extends ChangeNotifier {
     }
     if (track.category != TrackCategory.drums &&
         track.category != TrackCategory.mic) {
-      finalPitch = MusicTheory.clampPitch(finalPitch, track.rootMidi);
+      final preset = SoundLibrary.byId(track.presetId);
+      finalPitch = preset?.clampMidi(finalPitch) ??
+          MusicTheory.clampPitch(finalPitch, track.rootMidi);
     }
     final snapped = (startStep ~/ snapSteps) * snapSteps;
     track.notes.removeWhere(
@@ -910,13 +922,77 @@ class StudioController extends ChangeNotifier {
       );
       return;
     }
-    final clamped = MusicTheory.clampPitch(midi, track.rootMidi);
+    final preset = SoundLibrary.byId(track.presetId);
+    final clamped = preset?.clampMidi(midi) ??
+        MusicTheory.clampPitch(midi, track.rootMidi);
+    final resolved =
+        preset?.resolveRoot(clamped) ??
+        (path: track.sampleRoot, rootMidi: track.rootMidi);
     await AudioEngine.instance.playSample(
-      track.sampleRoot,
+      resolved.path,
       volume: track.volume * (velocity ?? 1.0),
       pan: track.pan,
       pitchMidi: clamped,
-      rootMidi: track.rootMidi,
+      rootMidi: resolved.rootMidi,
+      fx: track.fx,
+    );
+  }
+
+  /// Sequencer path: schedule pad hit at swung [onsetSeconds].
+  Future<void> triggerPadClocked(
+    Track track,
+    int padIndex, {
+    required double onsetSeconds,
+  }) async {
+    final preset = SoundLibrary.byId(track.presetId);
+    final kit = preset?.drumKit;
+    if (kit == null) return;
+    final names = kit.keys.toList();
+    if (padIndex >= names.length) return;
+    final path = kit[names[padIndex]]!;
+    if (!_trackAudible(track)) return;
+    await AudioEngine.instance.playSampleClocked(
+      path,
+      onsetSeconds: onsetSeconds,
+      volume: track.volume,
+      pan: track.pan,
+      fx: track.fx,
+    );
+  }
+
+  /// Sequencer path: schedule pitched note at swung [onsetSeconds].
+  Future<void> triggerNoteClocked(
+    Track track,
+    int midi, {
+    double? velocity,
+    required double onsetSeconds,
+  }) async {
+    if (!_trackAudible(track)) return;
+    if (track.category == TrackCategory.mic) {
+      final path = track.recordedFilePath;
+      if (path == null || path.isEmpty) return;
+      await AudioEngine.instance.playSampleClocked(
+        path,
+        onsetSeconds: onsetSeconds,
+        volume: track.volume * (velocity ?? 1.0),
+        pan: track.pan,
+        fx: track.fx,
+      );
+      return;
+    }
+    final preset = SoundLibrary.byId(track.presetId);
+    final clamped = preset?.clampMidi(midi) ??
+        MusicTheory.clampPitch(midi, track.rootMidi);
+    final resolved =
+        preset?.resolveRoot(clamped) ??
+        (path: track.sampleRoot, rootMidi: track.rootMidi);
+    await AudioEngine.instance.playSampleClocked(
+      resolved.path,
+      onsetSeconds: onsetSeconds,
+      volume: track.volume * (velocity ?? 1.0),
+      pan: track.pan,
+      pitchMidi: clamped,
+      rootMidi: resolved.rootMidi,
       fx: track.fx,
     );
   }
@@ -1243,7 +1319,8 @@ class StudioController extends ChangeNotifier {
       final key = '${item.step}@${item.onset.toStringAsFixed(4)}';
       if (_firedKeys.contains(key)) continue;
       _firedKeys.add(key);
-      _fireStep(item.step);
+      // Schedule at exact swung onset (delay) instead of immediate fire.
+      _fireStep(item.step, onsetSeconds: item.onset);
       if (item.onset > _scheduledThroughOnset) {
         _scheduledThroughOnset = item.onset;
       }
@@ -1276,11 +1353,14 @@ class StudioController extends ChangeNotifier {
       if (_firedKeys.contains(key)) continue;
       _firedKeys.add(key);
       final accent = item.step % p.stepsPerBar == 0;
-      unawaited(AudioEngine.instance.playMetronomeClick(accent: accent));
+      unawaited(AudioEngine.instance.playMetronomeClickClocked(
+        accent: accent,
+        onsetSeconds: item.onset,
+      ));
     }
   }
 
-  void _fireStep(int step) {
+  void _fireStep(int step, {required double onsetSeconds}) {
     final p = project;
     if (p == null) return;
 
@@ -1304,7 +1384,7 @@ class StudioController extends ChangeNotifier {
         if (!_trackAudible(track)) continue;
         for (final note in pat.notesFor(track.id)) {
           if (note.startStep != localStep) continue;
-          _maybePlayNote(track, note);
+          _maybePlayNote(track, note, onsetSeconds: onsetSeconds);
         }
       }
       return;
@@ -1314,12 +1394,16 @@ class StudioController extends ChangeNotifier {
       if (!_trackAudible(track)) continue;
       for (final note in track.notes) {
         if (note.startStep != step) continue;
-        _maybePlayNote(track, note);
+        _maybePlayNote(track, note, onsetSeconds: onsetSeconds);
       }
     }
   }
 
-  void _maybePlayNote(Track track, NoteEvent note) {
+  void _maybePlayNote(
+    Track track,
+    NoteEvent note, {
+    required double onsetSeconds,
+  }) {
     final prob = note.probability.clamp(0, 100);
     if (prob < 100) {
       if (_rng.nextInt(100) >= prob) return;
@@ -1327,9 +1411,14 @@ class StudioController extends ChangeNotifier {
     final vel = note.velocity / 127.0;
     if (track.category == TrackCategory.drums) {
       final pad = DrumPadMap.padIndexForPitch(note.pitch);
-      unawaited(triggerPad(track, pad));
+      unawaited(triggerPadClocked(track, pad, onsetSeconds: onsetSeconds));
     } else {
-      unawaited(triggerNote(track, note.pitch, velocity: vel));
+      unawaited(triggerNoteClocked(
+        track,
+        note.pitch,
+        velocity: vel,
+        onsetSeconds: onsetSeconds,
+      ));
     }
   }
 

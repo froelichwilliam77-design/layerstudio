@@ -66,5 +66,15 @@ void main() {
       );
       expect(items.any((e) => e.step == 1), isTrue);
     });
+
+    test('delayUntilOnset and scheduleDelay', () {
+      expect(AudioClockMath.delayUntilOnset(1.0, 1.04), closeTo(0.04, 1e-9));
+      expect(AudioClockMath.isOnsetDue(1.0, 0.999), isTrue);
+      expect(AudioClockMath.isOnsetDue(1.0, 1.02), isFalse);
+      final d = AudioClockMath.scheduleDelay(nowSec: 1.0, onsetSec: 1.04);
+      expect(d.inMicroseconds, closeTo(40000, 1));
+      final overdue = AudioClockMath.scheduleDelay(nowSec: 1.05, onsetSec: 1.04);
+      expect(overdue, Duration.zero);
+    });
   });
 }
