@@ -120,6 +120,7 @@ Binary: 53
 - `lib/widgets/guitar_chords.dart`
 - `lib/widgets/mixer_channel.dart`
 - `lib/widgets/piano_roll.dart`
+- `lib/widgets/param_lock_sheet.dart`
 - `lib/widgets/step_sequencer.dart`
 - `lib/widgets/touch_keyboard.dart`
 - `lib/widgets/transport_bar.dart`

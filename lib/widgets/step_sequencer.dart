@@ -5,6 +5,7 @@ import '../data/sound_library.dart';
 import '../models/track.dart';
 import '../services/studio_controller.dart';
 import '../theme/studio_theme.dart';
+import 'param_lock_sheet.dart';
 
 class StepSequencer extends StatelessWidget {
   const StepSequencer({super.key, required this.track});
@@ -123,6 +124,16 @@ class StepSequencer extends StatelessWidget {
             ],
           ),
         ),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(10, 0, 10, 4),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Drag across steps to paint · tap toggles · long-press lit step for locks',
+              style: TextStyle(fontSize: 10, color: StudioColors.textDim),
+            ),
+          ),
+        ),
         Expanded(
           child: ListView.builder(
             itemCount: pages,
@@ -169,7 +180,7 @@ class StepSequencer extends StatelessWidget {
   }
 }
 
-class _PadRow extends StatelessWidget {
+class _PadRow extends StatefulWidget {
   const _PadRow({
     required this.label,
     required this.track,
@@ -187,128 +198,219 @@ class _PadRow extends StatelessWidget {
   final int playhead;
 
   @override
-  Widget build(BuildContext context) {
-    final c = context.read<StudioController>();
-    final trackColor = StudioColors.forTrack(track);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 78,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: trackColor.withValues(alpha: 0.85),
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          for (var s = 0; s < steps; s++)
-            Builder(builder: (context) {
-              final step = offset + s;
-              final on = c.isStepOn(track, padIndex, step);
-              final isPlay = playhead == step;
-              final beat = s % 4 == 0;
-              final vel = on ? c.stepVelocity(track, padIndex, step) : 0;
-              final prob = on ? c.stepProbability(track, padIndex, step) : 100;
-              return Padding(
-                padding: const EdgeInsets.only(right: 4),
-                child: GestureDetector(
-                  onTap: () => c.setStepCell(
-                    trackId: track.id,
-                    padIndex: padIndex,
-                    step: step,
-                    on: !on,
-                  ),
-                  onLongPress: on
-                      ? () => _editStepParams(
-                            context,
-                            c,
-                            step: step,
-                            velocity: vel,
-                            probability: prob,
-                          )
-                      : null,
-                  child: _VelocityStep(
-                    on: on,
-                    velocity: vel,
-                    probability: prob,
-                    isPlay: isPlay,
-                    beat: beat,
-                    color: trackColor,
-                  ),
-                ),
-              );
-            }),
-        ],
-      ),
+  State<_PadRow> createState() => _PadRowState();
+}
+
+class _PadRowState extends State<_PadRow> {
+  static const stepW = 28.0;
+  static const stepGap = 4.0;
+  static const labelW = 78.0;
+
+  final Set<int> _trail = {};
+  bool _paintOn = true;
+  bool _moved = false;
+  bool _pendingToggle = false;
+  int? _startStep;
+
+  int? _stepAt(Offset local) {
+    final x = local.dx - labelW;
+    if (x < 0) return null;
+    final stride = stepW + stepGap;
+    final i = (x / stride).floor();
+    if (i < 0 || i >= widget.steps) return null;
+    // Only hit if within the step cell (not the gap).
+    final within = x - i * stride;
+    if (within > stepW) return null;
+    return widget.offset + i;
+  }
+
+  Future<void> _openParamLock(
+    BuildContext context,
+    StudioController c,
+    int step,
+  ) async {
+    if (!c.isStepOn(widget.track, widget.padIndex, step)) return;
+    final vel = c.stepVelocity(widget.track, widget.padIndex, step);
+    final prob = c.stepProbability(widget.track, widget.padIndex, step);
+    final trackColor = StudioColors.forTrack(widget.track);
+    final result = await showParamLockSheet(
+      context,
+      accent: trackColor,
+      velocity: vel,
+      probability: prob,
+      showLength: false,
+      title: 'Step lock · ${widget.label}',
+    );
+    if (result == null) return;
+    if (result.delete) {
+      c.beginNoteStroke(widget.track.id);
+      c.paintStepCell(
+        trackId: widget.track.id,
+        padIndex: widget.padIndex,
+        step: step,
+        on: false,
+      );
+      c.endNoteStroke(label: 'Delete step');
+      return;
+    }
+    c.setStepVelocity(
+      trackId: widget.track.id,
+      padIndex: widget.padIndex,
+      step: step,
+      velocity: result.velocity,
+    );
+    c.setStepProbability(
+      trackId: widget.track.id,
+      padIndex: widget.padIndex,
+      step: step,
+      probability: result.probability,
     );
   }
 
-  Future<void> _editStepParams(
-    BuildContext context,
-    StudioController c, {
-    required int step,
-    required int velocity,
-    required int probability,
-  }) async {
-    var vel = velocity.toDouble();
-    var prob = probability.toDouble();
-    final result = await showDialog<(int, int)>(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Step params'),
-          content: StatefulBuilder(
-            builder: (ctx, setSt) => Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('Velocity ${vel.round()}'),
-                Slider(
-                  min: 1,
-                  max: 127,
-                  value: vel,
-                  onChanged: (x) => setSt(() => vel = x),
+  @override
+  Widget build(BuildContext context) {
+    final c = context.watch<StudioController>();
+    final trackColor = StudioColors.forTrack(widget.track);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Listener(
+        onPointerDown: (e) {
+          final step = _stepAt(e.localPosition);
+          if (step == null) return;
+          final on = c.isStepOn(widget.track, widget.padIndex, step);
+          _trail
+            ..clear()
+            ..add(step);
+          _moved = false;
+          _startStep = step;
+          _pendingToggle = false;
+
+          if (on) {
+            // Tap → toggle off; drag → erase stroke; long-press → param lock.
+            _paintOn = false;
+            _pendingToggle = true;
+            c.beginNoteStroke(widget.track.id);
+          } else {
+            _paintOn = true;
+            c.beginNoteStroke(widget.track.id);
+            c.paintStepCell(
+              trackId: widget.track.id,
+              padIndex: widget.padIndex,
+              step: step,
+              on: true,
+            );
+          }
+          setState(() {});
+        },
+        onPointerMove: (e) {
+          if (_startStep == null) return;
+          final step = _stepAt(e.localPosition);
+          if (step == null) return;
+          if (step != _startStep && !_moved) {
+            _moved = true;
+            if (_pendingToggle) {
+              c.paintStepCell(
+                trackId: widget.track.id,
+                padIndex: widget.padIndex,
+                step: _startStep!,
+                on: false,
+              );
+              _pendingToggle = false;
+            }
+          }
+          if (_trail.contains(step)) return;
+          _trail.add(step);
+          if (_pendingToggle) return;
+          c.paintStepCell(
+            trackId: widget.track.id,
+            padIndex: widget.padIndex,
+            step: step,
+            on: _paintOn,
+          );
+          setState(() {});
+        },
+        onPointerUp: (_) {
+          final moved = _moved;
+          final start = _startStep;
+          final pending = _pendingToggle;
+          final paintOn = _paintOn;
+          if (!moved && pending && start != null) {
+            // Tap on lit step → toggle off (foundation behavior).
+            c.paintStepCell(
+              trackId: widget.track.id,
+              padIndex: widget.padIndex,
+              step: start,
+              on: false,
+            );
+          }
+          c.endNoteStroke(label: paintOn ? 'Paint steps' : 'Erase steps');
+          _trail.clear();
+          _startStep = null;
+          _pendingToggle = false;
+          if (mounted) setState(() {});
+        },
+        onPointerCancel: (_) {
+          c.endNoteStroke(label: 'Paint steps');
+          _trail.clear();
+          _startStep = null;
+          _pendingToggle = false;
+          if (mounted) setState(() {});
+        },
+        child: Row(
+          children: [
+            SizedBox(
+              width: labelW,
+              child: Text(
+                widget.label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: trackColor.withValues(alpha: 0.85),
                 ),
-                Text('Probability ${prob.round()}%'),
-                Slider(
-                  min: 0,
-                  max: 100,
-                  divisions: 20,
-                  value: prob,
-                  onChanged: (x) => setSt(() => prob = x),
-                ),
-              ],
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, (vel.round(), prob.round())),
-              child: const Text('Set'),
-            ),
+            for (var s = 0; s < widget.steps; s++)
+              Builder(builder: (context) {
+                final step = widget.offset + s;
+                final on = c.isStepOn(widget.track, widget.padIndex, step);
+                final isPlay = widget.playhead == step;
+                final beat = s % 4 == 0;
+                final vel =
+                    on ? c.stepVelocity(widget.track, widget.padIndex, step) : 0;
+                final prob = on
+                    ? c.stepProbability(widget.track, widget.padIndex, step)
+                    : 100;
+                return Padding(
+                  padding: EdgeInsets.only(
+                      right: s == widget.steps - 1 ? 0 : stepGap),
+                  child: GestureDetector(
+                    onLongPress: on
+                        ? () async {
+                            // Cancel tap-toggle stroke; open floating param lock.
+                            _pendingToggle = false;
+                            _startStep = null;
+                            _trail.clear();
+                            c.endNoteStroke(label: 'Paint steps');
+                            if (mounted) setState(() {});
+                            await _openParamLock(context, c, step);
+                          }
+                        : null,
+                    child: _VelocityStep(
+                      on: on,
+                      velocity: vel,
+                      probability: prob,
+                      isPlay: isPlay,
+                      beat: beat,
+                      color: trackColor,
+                      trail: _trail.contains(step),
+                    ),
+                  ),
+                );
+              }),
           ],
-        );
-      },
-    );
-    if (result == null) return;
-    c.setStepVelocity(
-      trackId: track.id,
-      padIndex: padIndex,
-      step: step,
-      velocity: result.$1,
-    );
-    c.setStepProbability(
-      trackId: track.id,
-      padIndex: padIndex,
-      step: step,
-      probability: result.$2,
+        ),
+      ),
     );
   }
 }
@@ -322,6 +424,7 @@ class _VelocityStep extends StatelessWidget {
     required this.isPlay,
     required this.beat,
     required this.color,
+    this.trail = false,
   });
 
   final bool on;
@@ -330,6 +433,7 @@ class _VelocityStep extends StatelessWidget {
   final bool isPlay;
   final bool beat;
   final Color color;
+  final bool trail;
 
   @override
   Widget build(BuildContext context) {
@@ -350,8 +454,10 @@ class _VelocityStep extends StatelessWidget {
         border: Border.all(
           color: isPlay
               ? StudioColors.play
-              : (on ? color.withValues(alpha: 0.55) : StudioColors.border),
-          width: isPlay ? 2 : 1,
+              : trail
+                  ? color.withValues(alpha: 0.85)
+                  : (on ? color.withValues(alpha: 0.55) : StudioColors.border),
+          width: isPlay || trail ? 2 : 1,
         ),
         boxShadow: on
             ? [
@@ -361,12 +467,25 @@ class _VelocityStep extends StatelessWidget {
                   spreadRadius: 0.2,
                 ),
               ]
-            : null,
+            : trail
+                ? [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.25),
+                      blurRadius: 6,
+                    ),
+                  ]
+                : null,
       ),
       clipBehavior: Clip.antiAlias,
       child: Stack(
         alignment: Alignment.bottomCenter,
         children: [
+          if (trail && !on)
+            Container(
+              width: w,
+              height: h,
+              color: color.withValues(alpha: 0.22),
+            ),
           if (on)
             Align(
               alignment: Alignment.bottomCenter,
@@ -402,7 +521,6 @@ class _VelocityStep extends StatelessWidget {
     );
   }
 }
-
 
 class _PatternPill extends StatelessWidget {
   const _PatternPill({
