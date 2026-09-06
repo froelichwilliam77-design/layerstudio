@@ -21,14 +21,14 @@ class StudioColors {
   static const drumsAmber = Color(0xFFFFB020);
   static const bassCyan = Color(0xFF00D4FF);
   static const guitarViolet = Color(0xFF9B6BFF);
-  static const keysBlue = Color(0xFF7B8CFF);
+  static const keysGreen = Color(0xFF2EE6A6);
   static const micGreen = Color(0xFF66BB6A);
 
   static Color forCategory(TrackCategory cat) => switch (cat) {
         TrackCategory.drums => drumsCopper,
         TrackCategory.bass => bassCyan,
         TrackCategory.guitar => guitarViolet,
-        TrackCategory.keys => keysBlue,
+        TrackCategory.keys => keysGreen,
         TrackCategory.mic => micGreen,
       };
 
