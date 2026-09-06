@@ -1,9 +1,16 @@
 import 'fx_settings.dart';
 import 'note_event.dart';
 
-enum TrackCategory { drums, bass, guitar, keys }
+enum TrackCategory { drums, bass, guitar, keys, mic }
 
-enum TrackInstrumentMode { drumPads, stepSeq, pianoRoll, keyboard, guitarChords }
+enum TrackInstrumentMode {
+  drumPads,
+  stepSeq,
+  pianoRoll,
+  keyboard,
+  guitarChords,
+  micRecord,
+}
 
 class Track {
   Track({
@@ -21,6 +28,8 @@ class Track {
     FxSettings? fx,
     this.instrumentMode,
     this.rootMidi = 36,
+    this.recordArmed = false,
+    this.recordedFilePath,
   })  : notes = notes ?? <NoteEvent>[],
         fx = fx ?? FxSettings();
 
@@ -29,7 +38,7 @@ class Track {
   TrackCategory category;
   String presetId;
 
-  /// Asset path for the root sample (pitch reference).
+  /// Asset path for the root sample (pitch reference), or file path for mic.
   String sampleRoot;
 
   /// MIDI note the [sampleRoot] was recorded at.
@@ -44,6 +53,12 @@ class Track {
   FxSettings fx;
   TrackInstrumentMode? instrumentMode;
 
+  /// Mic track: armed to record on next play.
+  bool recordArmed;
+
+  /// Absolute path to last mic take (WAV), if any.
+  String? recordedFilePath;
+
   TrackInstrumentMode get effectiveMode {
     if (instrumentMode != null) return instrumentMode!;
     return switch (category) {
@@ -51,6 +66,7 @@ class Track {
       TrackCategory.bass => TrackInstrumentMode.pianoRoll,
       TrackCategory.guitar => TrackInstrumentMode.guitarChords,
       TrackCategory.keys => TrackInstrumentMode.keyboard,
+      TrackCategory.mic => TrackInstrumentMode.micRecord,
     };
   }
 
@@ -63,6 +79,8 @@ class Track {
     List<NoteEvent>? notes,
     FxSettings? fx,
     TrackInstrumentMode? instrumentMode,
+    bool? recordArmed,
+    String? recordedFilePath,
   }) {
     return Track(
       id: id,
@@ -79,6 +97,8 @@ class Track {
       notes: notes ?? this.notes,
       fx: fx ?? this.fx,
       instrumentMode: instrumentMode ?? this.instrumentMode,
+      recordArmed: recordArmed ?? this.recordArmed,
+      recordedFilePath: recordedFilePath ?? this.recordedFilePath,
     );
   }
 
@@ -97,6 +117,8 @@ class Track {
         'notes': notes.map((n) => n.toJson()).toList(),
         'fx': fx.toJson(),
         'instrumentMode': instrumentMode?.name,
+        'recordArmed': recordArmed,
+        'recordedFilePath': recordedFilePath,
       };
 
   factory Track.fromJson(Map<String, dynamic> json) => Track(
@@ -126,5 +148,7 @@ class Track {
                 orElse: () => TrackInstrumentMode.pianoRoll,
               )
             : null,
+        recordArmed: (json['recordArmed'] as bool?) ?? false,
+        recordedFilePath: json['recordedFilePath'] as String?,
       );
 }

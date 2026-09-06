@@ -1,21 +1,43 @@
 #!/usr/bin/env python3
-"""Regenerate LayerStudio synthetic WAV sample pack (CC0)."""
-import math, struct, wave, os, random, sys
+"""Regenerate LayerStudio synthetic WAV sample pack (CC0).
+
+Drum samples are written as **stereo** so SoLoud Freeverb inserts can activate.
+Melodic samples remain mono (pitch-rate playback); reverb still falls back to echo wet.
+"""
+import math, struct, wave, os, random
 
 SR = 44100
 ROOT = os.path.join(os.path.dirname(__file__), '..', 'assets', 'samples')
 
-def write_wav(path, samples, sr=SR):
+def write_wav(path, samples, sr=SR, stereo=False):
+    """samples: list of float, or list of (L,R) if stereo=True."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with wave.open(path, 'w') as w:
-        w.setnchannels(1)
+        w.setnchannels(2 if stereo else 1)
         w.setsampwidth(2)
         w.setframerate(sr)
-        frames = b''.join(
-            struct.pack('<h', max(-32767, min(32767, int(s * 32767))))
-            for s in samples
-        )
-        w.writeframes(frames)
+        frames = bytearray()
+        if stereo:
+            for pair in samples:
+                if isinstance(pair, (list, tuple)):
+                    l, r = pair
+                else:
+                    l = r = pair
+                for s in (l, r):
+                    frames += struct.pack('<h', max(-32767, min(32767, int(s * 32767))))
+        else:
+            for s in samples:
+                frames += struct.pack('<h', max(-32767, min(32767, int(s * 32767))))
+        w.writeframes(bytes(frames))
+
+def to_stereo(mono, pan=0.0):
+    """pan -1..1 → stereo pair list."""
+    pan = max(-1.0, min(1.0, pan))
+    # equal-power pan
+    angle = (pan + 1) * 0.25 * math.pi
+    l_g = math.cos(angle)
+    r_g = math.sin(angle)
+    return [(s * l_g, s * r_g) for s in mono]
 
 def env_exp(i, n, attack=0.01, decay=0.3):
     t = i / max(n, 1)
@@ -142,18 +164,31 @@ def softpad(freq, dur=2.0):
         out.append(s * env * 0.25)
     return out
 
+def click(freq=1000, dur=0.04):
+    n = int(SR * dur)
+    out = []
+    for i in range(n):
+        t = i / SR
+        out.append(math.sin(2 * math.pi * freq * t) * math.exp(-t * 80) * 0.7)
+    return out
+
 def main():
+    random.seed(42)
     base = os.path.abspath(ROOT)
-    write_wav(f'{base}/drums/rock_kick.wav', kick())
-    write_wav(f'{base}/drums/rock_snare.wav', snare())
-    write_wav(f'{base}/drums/rock_hat_closed.wav', hihat(0.1, False))
-    write_wav(f'{base}/drums/rock_hat_open.wav', hihat(0.35, True))
-    write_wav(f'{base}/drums/rock_tom.wav', tone(120, 0.4, 'sine', 0.005, 0.2, 0.7))
-    write_wav(f'{base}/drums/elec_kick.wav', kick808())
-    write_wav(f'{base}/drums/elec_snare.wav', snare(0.28))
-    write_wav(f'{base}/drums/elec_hat.wav', hihat(0.08, False))
-    write_wav(f'{base}/drums/elec_clap.wav', clap())
-    write_wav(f'{base}/drums/elec_perc.wav', tone(440, 0.15, 'square', 0.001, 0.05, 0.25))
+    # Stereo drums with light spatial pan (enables Freeverb).
+    write_wav(f'{base}/drums/rock_kick.wav', to_stereo(kick(), 0.0), stereo=True)
+    write_wav(f'{base}/drums/rock_snare.wav', to_stereo(snare(), 0.15), stereo=True)
+    write_wav(f'{base}/drums/rock_hat_closed.wav', to_stereo(hihat(0.1, False), -0.25), stereo=True)
+    write_wav(f'{base}/drums/rock_hat_open.wav', to_stereo(hihat(0.35, True), -0.2), stereo=True)
+    write_wav(f'{base}/drums/rock_tom.wav', to_stereo(tone(120, 0.4, 'sine', 0.005, 0.2, 0.7), -0.1), stereo=True)
+    write_wav(f'{base}/drums/elec_kick.wav', to_stereo(kick808(), 0.0), stereo=True)
+    write_wav(f'{base}/drums/elec_snare.wav', to_stereo(snare(0.28), 0.12), stereo=True)
+    write_wav(f'{base}/drums/elec_hat.wav', to_stereo(hihat(0.08, False), -0.3), stereo=True)
+    write_wav(f'{base}/drums/elec_clap.wav', to_stereo(clap(), 0.2), stereo=True)
+    write_wav(f'{base}/drums/elec_perc.wav', to_stereo(tone(440, 0.15, 'square', 0.001, 0.05, 0.25), 0.35), stereo=True)
+    # Metronome click (stereo center)
+    write_wav(f'{base}/drums/metronome_click.wav', to_stereo(click(1200, 0.035), 0.0), stereo=True)
+    write_wav(f'{base}/drums/metronome_accent.wav', to_stereo(click(1600, 0.045), 0.0), stereo=True)
 
     clean = tone(65.41, 0.8, 'sine', 0.02, 0.6, 0.55)
     clean2 = tone(130.82, 0.8, 'sine', 0.02, 0.4, 0.15)
@@ -173,7 +208,7 @@ def main():
     write_wav(f'{base}/guitar/highgain_e2.wav', [math.tanh(s * 8) * 0.5 for s in pluck(82.41, 0.9, 0.25)])
     write_wav(f'{base}/keys/piano_c4.wav', pianoish(261.63))
     write_wav(f'{base}/keys/pad_c4.wav', softpad(261.63))
-    print('Wrote samples under', base)
+    print('Wrote stereo drums + mono melodic under', base)
 
 if __name__ == '__main__':
     main()

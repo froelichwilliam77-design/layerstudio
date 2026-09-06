@@ -59,85 +59,109 @@ class _HomeScreenState extends State<HomeScreen> {
         icon: const Icon(Icons.add),
         label: const Text('New Project'),
       ),
-      body: c.recent.isEmpty
-          ? EmptyState(
-              icon: Icons.library_music_outlined,
-              title: 'Make your first song',
-              subtitle:
-                  'Pick a tempo, add drums & instruments, draw notes, mix, and export.',
-              actionLabel: 'New Project',
-              onAction: () => _newProject(context),
-            )
-          : ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-              itemCount: c.recent.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (context, i) {
-                final p = c.recent[i];
-                return Dismissible(
-                  key: ValueKey(p.id),
-                  direction: DismissDirection.endToStart,
-                  background: Container(
-                    alignment: Alignment.centerRight,
-                    padding: const EdgeInsets.only(right: 20),
-                    decoration: BoxDecoration(
-                      color: StudioColors.danger.withValues(alpha: 0.25),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Icon(Icons.delete, color: StudioColors.danger),
-                  ),
-                  confirmDismiss: (_) async {
-                    return await showDialog<bool>(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: const Text('Delete project?'),
-                            content: Text('Delete "${p.name}" permanently?'),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(ctx, false),
-                                child: const Text('Cancel'),
-                              ),
-                              FilledButton(
-                                onPressed: () => Navigator.pop(ctx, true),
-                                child: const Text('Delete'),
-                              ),
-                            ],
-                          ),
-                        ) ??
-                        false;
-                  },
-                  onDismissed: (_) => c.deleteProject(p.id),
-                  child: Card(
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      title: Text(
-                        p.name,
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      subtitle: Text(
-                        '${p.bpm} BPM · ${p.key} ${p.scale} · '
-                        '${p.tracks.length} tracks · ${fmt.format(p.updatedAt.toLocal())}',
-                        style: const TextStyle(color: StudioColors.textDim),
-                      ),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () async {
-                        await c.openProject(p);
-                        if (context.mounted) {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const StudioScreen(),
-                            ),
-                          );
-                        }
-                      },
-                    ),
-                  ),
-                );
-              },
+      body: Column(
+        children: [
+          if (!c.exportBannerDismissed)
+            MaterialBanner(
+              content: const Text(
+                'Export your .layerstudio project so you do not lose work if you reinstall or switch phones.',
+              ),
+              leading: const Icon(Icons.folder_zip_outlined),
+              actions: [
+                TextButton(
+                  onPressed: () => c.dismissExportBanner(),
+                  child: const Text('Got it'),
+                ),
+              ],
             ),
+          Expanded(
+            child: c.recent.isEmpty
+                ? EmptyState(
+                    icon: Icons.library_music_outlined,
+                    title: 'Make your first beat',
+                    subtitle:
+                        'Beat-maker first: pick a tempo, program drums, layer bass/keys, mix, and export.',
+                    actionLabel: 'New Project',
+                    onAction: () => _newProject(context),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+                    itemCount: c.recent.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    itemBuilder: (context, i) {
+                      final p = c.recent[i];
+                      return Dismissible(
+                        key: ValueKey(p.id),
+                        direction: DismissDirection.endToStart,
+                        background: Container(
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 20),
+                          decoration: BoxDecoration(
+                            color: StudioColors.danger.withValues(alpha: 0.25),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: const Icon(Icons.delete,
+                              color: StudioColors.danger),
+                        ),
+                        confirmDismiss: (_) async {
+                          return await showDialog<bool>(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: const Text('Delete project?'),
+                                  content:
+                                      Text('Delete "${p.name}" permanently?'),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(ctx, false),
+                                      child: const Text('Cancel'),
+                                    ),
+                                    FilledButton(
+                                      onPressed: () => Navigator.pop(ctx, true),
+                                      child: const Text('Delete'),
+                                    ),
+                                  ],
+                                ),
+                              ) ??
+                              false;
+                        },
+                        onDismissed: (_) => c.deleteProject(p.id),
+                        child: Card(
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            title: Text(
+                              p.name,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            subtitle: Text(
+                              '${p.bpm} BPM · ${p.key} ${p.scale} · '
+                              '${p.tracks.length} tracks · ${fmt.format(p.updatedAt.toLocal())}',
+                              style: const TextStyle(
+                                  color: StudioColors.textDim),
+                            ),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () async {
+                              await c.openProject(p);
+                              if (context.mounted) {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => const StudioScreen(),
+                                  ),
+                                );
+                              }
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
     );
   }
 

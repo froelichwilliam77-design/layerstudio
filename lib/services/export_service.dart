@@ -31,10 +31,18 @@ class ExportService {
     final cache = <String, Float64List>{};
 
     Future<Float64List?> loadPcm(String asset) async {
+      if (asset.isEmpty) return null;
       if (cache.containsKey(asset)) return cache[asset];
       try {
-        final data = await rootBundle.load(asset);
-        final pcm = _decodeWav(data.buffer.asUint8List());
+        final Uint8List bytes;
+        if (asset.startsWith('/') || asset.startsWith('file:')) {
+          final path = asset.replaceFirst('file:', '');
+          bytes = await File(path).readAsBytes();
+        } else {
+          final data = await rootBundle.load(asset);
+          bytes = data.buffer.asUint8List();
+        }
+        final pcm = _decodeWav(bytes);
         if (pcm != null) cache[asset] = pcm;
         return pcm;
       } catch (_) {

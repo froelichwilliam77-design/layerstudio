@@ -19,7 +19,7 @@ class StepSequencer extends StatelessWidget {
     final kit = preset?.drumKit;
     if (kit == null) return const SizedBox.shrink();
     final names = kit.keys.toList();
-    final steps = 16; // one bar view, scrollable for more
+    const steps = 16;
     final pages = (p.loopEndStep / steps).ceil().clamp(1, 8);
 
     return Column(
@@ -29,10 +29,59 @@ class StepSequencer extends StatelessWidget {
           child: Row(
             children: [
               const Text('16-step', style: TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(width: 8),
+              ...List.generate(p.patterns.length, (i) {
+                final selected = p.activePatternIndex == i;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: ChoiceChip(
+                    label: Text(p.patterns[i].name,
+                        style: const TextStyle(fontSize: 12)),
+                    selected: selected,
+                    onSelected: (_) => c.selectPattern(i),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                );
+              }),
               const Spacer(),
-              TextButton(
-                onPressed: () => c.clearTrackNotes(track.id),
-                child: const Text('Clear'),
+              Text('Prob ${c.drawProbability}%',
+                  style: const TextStyle(
+                      fontSize: 11, color: StudioColors.textDim)),
+              SizedBox(
+                width: 80,
+                child: Slider(
+                  min: 0,
+                  max: 100,
+                  divisions: 20,
+                  value: c.drawProbability.toDouble(),
+                  onChanged: (v) => c.setDrawProbability(v.round()),
+                ),
+              ),
+              PopupMenuButton<String>(
+                onSelected: (v) {
+                  switch (v) {
+                    case 'clear_pattern':
+                      c.clearPattern(p.activePatternIndex);
+                    case 'clear_track':
+                      c.clearTrackNotes(track.id);
+                    case 'clear_all':
+                      c.clearTrackAllPatterns(track.id);
+                    case 'copy_to_b':
+                      c.copyPattern(
+                          fromIndex: p.activePatternIndex, toIndex: 1);
+                  }
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                      value: 'clear_pattern', child: Text('Clear pattern')),
+                  PopupMenuItem(
+                      value: 'clear_track', child: Text('Clear track (pattern)')),
+                  PopupMenuItem(
+                      value: 'clear_all',
+                      child: Text('Clear track (all patterns)')),
+                  PopupMenuItem(
+                      value: 'copy_to_b', child: Text('Copy pattern → B')),
+                ],
               ),
             ],
           ),
@@ -121,6 +170,7 @@ class _PadRow extends StatelessWidget {
               final on = c.isStepOn(track, padIndex, step);
               final isPlay = playhead == step;
               final beat = s % 4 == 0;
+              final prob = on ? c.stepProbability(track, padIndex, step) : 100;
               return Padding(
                 padding: const EdgeInsets.only(right: 4),
                 child: GestureDetector(
@@ -130,24 +180,77 @@ class _PadRow extends StatelessWidget {
                     step: step,
                     on: !on,
                   ),
+                  onLongPress: on
+                      ? () async {
+                          final v = await showDialog<int>(
+                            context: context,
+                            builder: (ctx) {
+                              var val = prob.toDouble();
+                              return AlertDialog(
+                                title: const Text('Step probability'),
+                                content: StatefulBuilder(
+                                  builder: (ctx, setSt) => Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text('${val.round()}%'),
+                                      Slider(
+                                        min: 0,
+                                        max: 100,
+                                        divisions: 20,
+                                        value: val,
+                                        onChanged: (x) =>
+                                            setSt(() => val = x),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx),
+                                    child: const Text('Cancel'),
+                                  ),
+                                  FilledButton(
+                                    onPressed: () =>
+                                        Navigator.pop(ctx, val.round()),
+                                    child: const Text('Set'),
+                                  ),
+                                ],
+                              );
+                            },
+                          );
+                          if (v != null) {
+                            c.setStepProbability(
+                              trackId: track.id,
+                              padIndex: padIndex,
+                              step: step,
+                              probability: v,
+                            );
+                          }
+                        }
+                      : null,
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 80),
                     width: 28,
                     height: 28,
+                    alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: on
                           ? Color(track.colorValue)
-                          : (beat
-                              ? StudioColors.surface2
-                              : StudioColors.bg),
+                              .withValues(alpha: (prob / 100).clamp(0.25, 1))
+                          : (beat ? StudioColors.surface2 : StudioColors.bg),
                       borderRadius: BorderRadius.circular(6),
                       border: Border.all(
-                        color: isPlay
-                            ? StudioColors.play
-                            : StudioColors.border,
+                        color:
+                            isPlay ? StudioColors.play : StudioColors.border,
                         width: isPlay ? 2 : 1,
                       ),
                     ),
+                    child: on && prob < 100
+                        ? Text(
+                            '$prob',
+                            style: const TextStyle(fontSize: 8),
+                          )
+                        : null,
                   ),
                 ),
               );

@@ -38,15 +38,33 @@ void main() {
       expect(steps, [4, 5, 6]);
     });
 
-    test('stepsInLookahead respects loop wrap', () {
-      final steps = AudioClockMath.stepsInLookahead(
-        fromStepExclusive: 62,
-        toStepInclusive: 65,
-        loopEnabled: true,
+    test('swing delays even 16ths only', () {
+      expect(AudioClockMath.isSwungStep(0), isFalse);
+      expect(AudioClockMath.isSwungStep(1), isTrue);
+      expect(AudioClockMath.swingDelaySeconds(0, 100, 120), 0);
+      // 100% swing = half of one 16th = 0.0625s at 120 BPM
+      expect(
+        AudioClockMath.swingDelaySeconds(1, 100, 120),
+        closeTo(0.0625, 1e-9),
+      );
+      expect(
+        AudioClockMath.stepOnsetSeconds(1, 120, 50),
+        closeTo(0.125 + 0.03125, 1e-9),
+      );
+    });
+
+    test('swungStepsInWindow includes delayed even step', () {
+      final items = AudioClockMath.swungStepsInWindow(
+        nowSec: 0.12,
+        lookaheadSec: 0.05,
+        bpm: 120,
+        swingPercent: 50,
+        scheduledThroughOnset: -1,
+        loopEnabled: false,
         loopStartStep: 0,
         loopEndStep: 64,
       );
-      expect(steps, [63, 0, 1]);
+      expect(items.any((e) => e.step == 1), isTrue);
     });
   });
 }

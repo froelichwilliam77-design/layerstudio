@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/track.dart';
 import '../services/studio_controller.dart';
 import '../theme/studio_theme.dart';
 import 'empty_state.dart';
@@ -16,89 +17,297 @@ class ArrangeView extends StatelessWidget {
       return EmptyState(
         icon: Icons.layers_outlined,
         title: 'Stack your first layer',
-        subtitle: 'Add drums, bass, guitar, or keys from the Sound Library.',
+        subtitle:
+            'Beat-maker first: add a drum kit, program a groove, then layer bass/keys.',
         actionLabel: 'Open Sound Library',
         onAction: () => c.setTab(StudioTab.library),
       );
     }
 
-    final steps = p.loopEndStep.clamp(16, 256);
+    final steps = p.songMode
+        ? (p.arrangementEndBar * p.stepsPerBar).clamp(16, 512)
+        : p.loopEndStep.clamp(16, 256);
     const cellW = 10.0;
 
-    return ListView.builder(
+    return ListView(
       padding: const EdgeInsets.all(12),
-      itemCount: p.tracks.length,
-      itemBuilder: (context, i) {
-        final t = p.tracks[i];
-        final selected = t.id == c.selectedTrackId;
-        return GestureDetector(
-          onTap: () => c.selectTrack(t.id),
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: StudioColors.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: selected ? StudioColors.accent : StudioColors.border,
-                width: selected ? 2 : 1,
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        color: Color(t.colorValue),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        t.name,
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                    Text(
-                      t.category.name.toUpperCase(),
-                      style: const TextStyle(
-                        fontSize: 10,
-                        color: StudioColors.textDim,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline, size: 18),
-                      onPressed: () => c.removeTrack(t.id),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SizedBox(
-                    height: 36,
-                    width: steps * cellW,
-                    child: CustomPaint(
-                      painter: _ClipPainter(
-                        notes: t.notes.map((n) => n.startStep).toList(),
-                        color: Color(t.colorValue),
-                        playhead: c.playheadStep,
-                        steps: steps,
-                        cellW: cellW,
-                      ),
-                    ),
+      children: [
+        _PatternBank(c: c),
+        const SizedBox(height: 8),
+        _SongArrange(c: c),
+        const SizedBox(height: 12),
+        for (final t in p.tracks)
+          _TrackLane(
+            track: t,
+            selected: t.id == c.selectedTrackId,
+            playhead: c.playheadStep,
+            steps: steps,
+            cellW: cellW,
+            onSelect: () => c.selectTrack(t.id),
+            onDelete: () => c.removeTrack(t.id),
+          ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: () async {
+            await c.addMicTrack();
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Mic track added. Arm ● then Play to record from the playhead.',
                   ),
+                ),
+              );
+            }
+          },
+          icon: const Icon(Icons.mic_none),
+          label: const Text('Add mic track'),
+        ),
+      ],
+    );
+  }
+}
+
+class _PatternBank extends StatelessWidget {
+  const _PatternBank({required this.c});
+  final StudioController c;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = c.project!;
+    return Card(
+      color: StudioColors.surface,
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Patterns', style: TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              children: [
+                for (var i = 0; i < p.patterns.length; i++)
+                  ChoiceChip(
+                    label: Text(p.patterns[i].name),
+                    selected: p.activePatternIndex == i,
+                    onSelected: (_) => c.selectPattern(i),
+                  ),
+                ActionChip(
+                  label: const Text('Copy → next'),
+                  onPressed: () {
+                    final to = (p.activePatternIndex + 1) % p.patterns.length;
+                    c.copyPattern(fromIndex: p.activePatternIndex, toIndex: to);
+                  },
+                ),
+                ActionChip(
+                  label: const Text('Clear'),
+                  onPressed: () => c.clearPattern(p.activePatternIndex),
                 ),
               ],
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SongArrange extends StatelessWidget {
+  const _SongArrange({required this.c});
+  final StudioController c;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = c.project!;
+    return Card(
+      color: StudioColors.surface,
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text('Song arrange',
+                      style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+                FilterChip(
+                  label: Text(p.songMode ? 'Song mode ON' : 'Pattern mode'),
+                  selected: p.songMode,
+                  onSelected: (v) => c.updateProjectMeta(songMode: v),
+                ),
+                const SizedBox(width: 6),
+                FilledButton.tonal(
+                  onPressed: () => c.addArrangementClip(),
+                  child: const Text('Add clip'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            if (p.arrangement.isEmpty)
+              const Text(
+                'Add pattern clips to build a song (A → B → A…). Enable Song mode to play them in order.',
+                style: TextStyle(fontSize: 12, color: StudioColors.textDim),
+              )
+            else
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final clip in p.arrangement)
+                    InputChip(
+                      label: Text(
+                        '${c.patternById(clip.patternId)?.name ?? '?'} @ bar ${clip.startBar + 1} (${clip.lengthBars}b)',
+                      ),
+                      onDeleted: () => c.removeArrangementClip(clip.id),
+                      onPressed: () async {
+                        final bars = await showDialog<int>(
+                          context: context,
+                          builder: (ctx) {
+                            final ctl = TextEditingController(
+                                text: '${clip.lengthBars}');
+                            return AlertDialog(
+                              title: const Text('Clip length (bars)'),
+                              content: TextField(
+                                controller: ctl,
+                                keyboardType: TextInputType.number,
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx),
+                                  child: const Text('Cancel'),
+                                ),
+                                FilledButton(
+                                  onPressed: () => Navigator.pop(
+                                      ctx, int.tryParse(ctl.text)),
+                                  child: const Text('OK'),
+                                ),
+                              ],
+                            );
+                          },
+                        );
+                        if (bars != null) {
+                          clip.lengthBars = bars.clamp(1, 32);
+                          c.updateTrack(c.selectedTrack ?? c.project!.tracks.first);
+                        }
+                      },
+                    ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TrackLane extends StatelessWidget {
+  const _TrackLane({
+    required this.track,
+    required this.selected,
+    required this.playhead,
+    required this.steps,
+    required this.cellW,
+    required this.onSelect,
+    required this.onDelete,
+  });
+
+  final Track track;
+  final bool selected;
+  final int playhead;
+  final int steps;
+  final double cellW;
+  final VoidCallback onSelect;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.read<StudioController>();
+    return GestureDetector(
+      onTap: onSelect,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: StudioColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected ? StudioColors.accent : StudioColors.border,
+            width: selected ? 2 : 1,
           ),
-        );
-      },
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: Color(track.colorValue),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    track.name,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                if (track.category == TrackCategory.mic) ...[
+                  IconButton(
+                    tooltip: track.recordArmed ? 'Disarm' : 'Arm record',
+                    onPressed: () =>
+                        c.armMicTrack(track.id, !track.recordArmed),
+                    icon: Icon(
+                      track.recordArmed ? Icons.fiber_manual_record : Icons.fiber_manual_record_outlined,
+                      color: track.recordArmed
+                          ? StudioColors.danger
+                          : StudioColors.textDim,
+                      size: 18,
+                    ),
+                  ),
+                  if (track.recordedFilePath != null)
+                    const Icon(Icons.check_circle,
+                        size: 16, color: StudioColors.play),
+                ],
+                Text(
+                  track.category.name.toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: StudioColors.textDim,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  onPressed: onDelete,
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                height: 36,
+                width: steps * cellW,
+                child: CustomPaint(
+                  painter: _ClipPainter(
+                    notes: track.notes.map((n) => n.startStep).toList(),
+                    color: Color(track.colorValue),
+                    playhead: playhead,
+                    steps: steps,
+                    cellW: cellW,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
