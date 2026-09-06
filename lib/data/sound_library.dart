@@ -124,7 +124,7 @@ class SoundLibrary {
       description: 'Simple additive piano for melodies & chords.',
       samplePath: 'assets/samples/keys/piano_c4.wav',
       rootMidi: 60, // C4
-      colorValue: 0xFF7B8CFF,
+      colorValue: 0xFF2EE6A6,
     ),
     SoundPreset(
       id: 'keys_pad',
@@ -133,7 +133,7 @@ class SoundLibrary {
       description: 'Slow-attack ambient pad.',
       samplePath: 'assets/samples/keys/pad_c4.wav',
       rootMidi: 60,
-      colorValue: 0xFF9FA8DA,
+      colorValue: 0xFF66D9A8,
     ),
   ];
 

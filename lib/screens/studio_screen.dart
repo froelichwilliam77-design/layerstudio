@@ -7,10 +7,11 @@ import '../theme/studio_theme.dart';
 import '../widgets/arrange_view.dart';
 import '../widgets/drum_pads.dart';
 import '../widgets/empty_state.dart';
-import '../widgets/guitar_chords.dart';
+import '../widgets/fretboard.dart';
+import '../widgets/mode_segment.dart';
 import '../widgets/piano_roll.dart';
-import '../widgets/segmented_control.dart';
 import '../widgets/step_sequencer.dart';
+import '../widgets/strum_bars.dart';
 import '../widgets/touch_keyboard.dart';
 import '../widgets/track_rail.dart';
 import '../widgets/transport_bar.dart';
@@ -62,7 +63,6 @@ class StudioScreen extends StatelessWidget {
       ),
       body: Column(
         children: [
-          // Track hierarchy only where you pick what to edit (phone IA).
           if (onBeatSurface) TrackRail(controller: c),
           if (onBeatSurface)
             const Divider(height: 1, color: StudioColors.border),
@@ -117,7 +117,6 @@ class StudioScreen extends StatelessWidget {
         _ => false,
       };
 
-  /// Prefer drums as the primary Beat destination; keep current layer if already editing one.
   void _openBeatSurface(StudioController c) {
     final tracks = c.project?.tracks ?? [];
     final selected = c.selectedTrack;
@@ -195,159 +194,197 @@ class _Editor extends StatelessWidget {
       );
     }
 
+    final accent = Color(track.colorValue);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _EditorToolbar(c: c, track: track),
+        _StudioNavBar(c: c, track: track, accent: accent),
         Expanded(child: _editorBody(track)),
       ],
     );
   }
 
   Widget _editorBody(Track track) {
-    if (track.category == TrackCategory.drums) {
-      if (track.effectiveMode == TrackInstrumentMode.drumPads) {
-        return DrumPads(track: track);
-      }
-      return StepSequencer(track: track);
-    }
-    if (track.category == TrackCategory.keys && c.tab == StudioTab.keys) {
-      return TouchKeyboard(track: track);
-    }
-    if (track.category == TrackCategory.guitar && c.tab == StudioTab.guitar) {
-      return GuitarChordStrips(track: track);
-    }
-    // Bass (and keys/guitar piano-roll mode)
-    return PianoRoll(track: track);
+    final mode = track.effectiveMode;
+    return switch (mode) {
+      TrackInstrumentMode.drumPads => DrumPads(track: track),
+      TrackInstrumentMode.stepSeq => StepSequencer(track: track),
+      TrackInstrumentMode.fretboard => BassFretboard(track: track),
+      TrackInstrumentMode.guitarChords => StrumBars(track: track),
+      TrackInstrumentMode.keyboard => TouchKeyboard(track: track),
+      TrackInstrumentMode.pianoRoll => PianoRoll(track: track),
+      TrackInstrumentMode.micRecord => const Center(
+          child: Text('Arm mic from Mixer / Arrange'),
+        ),
+    };
   }
 }
 
-/// Single compact row: track color badge + name + mode segmented control.
-class _EditorToolbar extends StatelessWidget {
-  const _EditorToolbar({required this.c, required this.track});
+class _StudioNavBar extends StatelessWidget {
+  const _StudioNavBar({
+    required this.c,
+    required this.track,
+    required this.accent,
+  });
+
   final StudioController c;
   final Track track;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) {
-    final color = StudioColors.forTrack(track);
     final isDrums = track.category.isBeatPrimary;
-    final mode = _modeSegment();
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
-      child: Row(
+    return Material(
+      color: StudioColors.surface,
+      child: Column(
         children: [
-          Container(
-            width: 4,
-            height: 34,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(4),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            flex: 2,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+            child: Row(
               children: [
-                Text(
-                  isDrums
-                      ? 'BEAT'
-                      : 'LAYER · ${track.category.shortLabel.toUpperCase()}',
-                  style: TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.9,
-                    color: color,
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.22),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: accent.withValues(alpha: 0.55)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: accent.withValues(alpha: 0.25),
+                        blurRadius: 8,
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: accent,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        isDrums
+                            ? 'DRUMS'
+                            : track.category.shortLabel.toUpperCase(),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                Text(
-                  track.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    track.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          if (mode != null) ...[
-            const SizedBox(width: 8),
-            Expanded(flex: 3, child: mode),
-          ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+            child: _modeSegment(c, track, accent),
+          ),
+          const Divider(height: 1, color: StudioColors.border),
         ],
       ),
     );
   }
 
-  Widget? _modeSegment() {
-    final color = StudioColors.forTrack(track);
-
+  Widget _modeSegment(StudioController c, Track track, Color accent) {
     if (track.category == TrackCategory.drums) {
-      final current = track.effectiveMode == TrackInstrumentMode.drumPads
-          ? TrackInstrumentMode.drumPads
-          : TrackInstrumentMode.stepSeq;
-      return StudioSegmentedControl<TrackInstrumentMode>(
-        accent: color,
-        value: current,
-        segments: const [
-          StudioSegment(value: TrackInstrumentMode.drumPads, label: 'Pads'),
-          StudioSegment(value: TrackInstrumentMode.stepSeq, label: 'Step Seq'),
-        ],
-        onChanged: (mode) {
-          c.setTrackInstrumentMode(track, mode);
+      final idx =
+          track.effectiveMode == TrackInstrumentMode.drumPads ? 0 : 1;
+      return ModeSegment(
+        labels: const ['Pads', 'Step Seq'],
+        selectedIndex: idx,
+        accent: accent,
+        onChanged: (i) {
+          c.setTrackInstrumentMode(
+            track,
+            i == 0
+                ? TrackInstrumentMode.drumPads
+                : TrackInstrumentMode.stepSeq,
+          );
           c.setTab(StudioTab.drums);
         },
       );
     }
 
+    if (track.category == TrackCategory.bass) {
+      final idx =
+          track.effectiveMode == TrackInstrumentMode.pianoRoll ? 1 : 0;
+      return ModeSegment(
+        labels: const ['Fretboard', 'Piano Roll'],
+        selectedIndex: idx,
+        accent: accent,
+        onChanged: (i) {
+          c.setTrackInstrumentMode(
+            track,
+            i == 0
+                ? TrackInstrumentMode.fretboard
+                : TrackInstrumentMode.pianoRoll,
+          );
+          c.setTab(i == 0 ? StudioTab.keys : StudioTab.piano);
+        },
+      );
+    }
+
     if (track.category == TrackCategory.keys) {
-      final onKeyboard = c.tab == StudioTab.keys;
-      return StudioSegmentedControl<String>(
-        accent: color,
-        value: onKeyboard ? 'keyboard' : 'piano',
-        segments: const [
-          StudioSegment(value: 'piano', label: 'Piano Roll'),
-          StudioSegment(value: 'keyboard', label: 'Keyboard'),
-        ],
-        onChanged: (v) {
-          if (v == 'keyboard') {
-            c.setTrackInstrumentMode(track, TrackInstrumentMode.keyboard);
-            c.setTab(StudioTab.keys);
-          } else {
-            c.setTrackInstrumentMode(track, TrackInstrumentMode.pianoRoll);
-            c.setTab(StudioTab.piano);
-          }
+      final idx =
+          track.effectiveMode == TrackInstrumentMode.pianoRoll ? 0 : 1;
+      return ModeSegment(
+        labels: const ['Piano Roll', 'Keyboard'],
+        selectedIndex: idx,
+        accent: accent,
+        onChanged: (i) {
+          c.setTrackInstrumentMode(
+            track,
+            i == 0
+                ? TrackInstrumentMode.pianoRoll
+                : TrackInstrumentMode.keyboard,
+          );
+          c.setTab(i == 0 ? StudioTab.piano : StudioTab.keys);
         },
       );
     }
 
     if (track.category == TrackCategory.guitar) {
-      final onChords = c.tab == StudioTab.guitar;
-      return StudioSegmentedControl<String>(
-        accent: color,
-        value: onChords ? 'chords' : 'piano',
-        segments: const [
-          StudioSegment(value: 'piano', label: 'Piano Roll'),
-          StudioSegment(value: 'chords', label: 'Chords'),
-        ],
-        onChanged: (v) {
-          if (v == 'chords') {
-            c.setTrackInstrumentMode(track, TrackInstrumentMode.guitarChords);
-            c.setTab(StudioTab.guitar);
-          } else {
-            c.setTrackInstrumentMode(track, TrackInstrumentMode.pianoRoll);
-            c.setTab(StudioTab.piano);
-          }
+      final idx =
+          track.effectiveMode == TrackInstrumentMode.pianoRoll ? 0 : 1;
+      return ModeSegment(
+        labels: const ['Piano Roll', 'Strum'],
+        selectedIndex: idx,
+        accent: accent,
+        onChanged: (i) {
+          c.setTrackInstrumentMode(
+            track,
+            i == 0
+                ? TrackInstrumentMode.pianoRoll
+                : TrackInstrumentMode.guitarChords,
+          );
+          c.setTab(i == 0 ? StudioTab.piano : StudioTab.guitar);
         },
       );
     }
 
-    return null;
+    return const SizedBox.shrink();
   }
 }
