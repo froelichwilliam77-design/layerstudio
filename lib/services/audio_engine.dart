@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_soloud/flutter_soloud.dart';
 
 import '../models/fx_settings.dart';
+import '../utils/audio_clock_math.dart';
 import '../utils/music_theory.dart';
 
 /// Callbacks so StudioController can keep Play state honest.
@@ -32,6 +33,11 @@ class AudioEngine {
 
   Stopwatch? _transportWatch;
   double _transportOriginSeconds = 0;
+
+  /// Pending Timer-based clocked oneshots (flutter_soloud 3.5.4 has no
+  /// Dart playClocked / playScheduled — those land in ≥4.1 needing Flutter ≥3.41).
+  final List<Timer> _scheduledTimers = [];
+  int _scheduleEpoch = 0;
 
   static const metronomeClick = 'assets/samples/drums/metronome_click.wav';
   static const metronomeAccent = 'assets/samples/drums/metronome_accent.wav';
@@ -133,11 +139,13 @@ class AudioEngine {
   }
 
   void startTransportClock({double originSeconds = 0}) {
+    cancelScheduledPlays();
     _transportOriginSeconds = originSeconds;
     _transportWatch = Stopwatch()..start();
   }
 
   void pauseTransportClock() {
+    cancelScheduledPlays();
     final w = _transportWatch;
     if (w != null && w.isRunning) {
       _transportOriginSeconds += w.elapsedMicroseconds / 1e6;
@@ -146,12 +154,14 @@ class AudioEngine {
   }
 
   void stopTransportClock({double originSeconds = 0}) {
+    cancelScheduledPlays();
     _transportWatch?.stop();
     _transportWatch = null;
     _transportOriginSeconds = originSeconds;
   }
 
   void seekTransportClock(double originSeconds) {
+    cancelScheduledPlays();
     _transportOriginSeconds = originSeconds;
     if (_transportWatch != null) {
       _transportWatch!
@@ -315,20 +325,33 @@ class AudioEngine {
     }
   }
 
-  Future<SoundHandle?> playSample(
-    String assetPath, {
-    double volume = 1.0,
-    double pan = 0.0,
+
+  /// Cancel all pending clocked oneshots (pause / stop / seek / re-anchor).
+  void cancelScheduledPlays() {
+    _scheduleEpoch++;
+    for (final t in _scheduledTimers) {
+      t.cancel();
+    }
+    _scheduledTimers.clear();
+  }
+
+  /// Resolve an asset/file path to a loaded [AudioSource], or null.
+  Future<AudioSource?> _resolveSource(String assetPath) async {
+    final isFile = assetPath.startsWith('/') || assetPath.startsWith('file:');
+    if (isFile) {
+      return loadFile(assetPath.replaceFirst('file:', ''));
+    }
+    return loadAsset(assetPath);
+  }
+
+  Future<SoundHandle?> _playResolved(
+    AudioSource src, {
+    required double volume,
+    required double pan,
     int? pitchMidi,
     int rootMidi = 60,
     FxSettings? fx,
   }) async {
-    if (!_ready) return null;
-    final isFile = assetPath.startsWith('/') || assetPath.startsWith('file:');
-    final src = isFile
-        ? await loadFile(assetPath.replaceFirst('file:', ''))
-        : await loadAsset(assetPath);
-    if (src == null) return null;
     try {
       final handle = await _soloud.play(
         src,
@@ -343,9 +366,88 @@ class AudioEngine {
       _applyVoiceFx(src, handle, fx);
       return handle;
     } catch (e) {
-      debugPrint('playSample error: $e');
+      debugPrint('playResolved error: $e');
       return null;
     }
+  }
+
+  /// Clocked / tighter-scheduled oneshot.
+  ///
+  /// Uses musical [onsetSeconds] on the app transport clock: preloads the
+  /// source, then delays until the onset before calling SoLoud [play].
+  /// When flutter_soloud gains Dart [playClocked] (package ≥4.1), swap the
+  /// Timer path for the native sample-accurate API.
+  Future<SoundHandle?> playSampleClocked(
+    String assetPath, {
+    required double onsetSeconds,
+    double volume = 1.0,
+    double pan = 0.0,
+    int? pitchMidi,
+    int rootMidi = 60,
+    FxSettings? fx,
+  }) async {
+    if (!_ready) return null;
+    final src = await _resolveSource(assetPath);
+    if (src == null) return null;
+
+    final now = transportSeconds;
+    if (AudioClockMath.isOnsetDue(now, onsetSeconds)) {
+      return _playResolved(
+        src,
+        volume: volume,
+        pan: pan,
+        pitchMidi: pitchMidi,
+        rootMidi: rootMidi,
+        fx: fx,
+      );
+    }
+
+    final delay = AudioClockMath.scheduleDelay(
+      nowSec: now,
+      onsetSec: onsetSeconds,
+    );
+    final epoch = _scheduleEpoch;
+    final completer = Completer<SoundHandle?>();
+    late final Timer timer;
+    timer = Timer(delay, () async {
+      _scheduledTimers.remove(timer);
+      if (epoch != _scheduleEpoch) {
+        if (!completer.isCompleted) completer.complete(null);
+        return;
+      }
+      final handle = await _playResolved(
+        src,
+        volume: volume,
+        pan: pan,
+        pitchMidi: pitchMidi,
+        rootMidi: rootMidi,
+        fx: fx,
+      );
+      if (!completer.isCompleted) completer.complete(handle);
+    });
+    _scheduledTimers.add(timer);
+    return completer.future;
+  }
+
+  Future<SoundHandle?> playSample(
+    String assetPath, {
+    double volume = 1.0,
+    double pan = 0.0,
+    int? pitchMidi,
+    int rootMidi = 60,
+    FxSettings? fx,
+  }) async {
+    if (!_ready) return null;
+    final src = await _resolveSource(assetPath);
+    if (src == null) return null;
+    return _playResolved(
+      src,
+      volume: volume,
+      pan: pan,
+      pitchMidi: pitchMidi,
+      rootMidi: rootMidi,
+      fx: fx,
+    );
   }
 
   Future<void> playMetronomeClick({required bool accent}) async {
@@ -355,7 +457,19 @@ class AudioEngine {
     );
   }
 
+  Future<void> playMetronomeClickClocked({
+    required bool accent,
+    required double onsetSeconds,
+  }) async {
+    await playSampleClocked(
+      accent ? metronomeAccent : metronomeClick,
+      onsetSeconds: onsetSeconds,
+      volume: accent ? 0.85 : 0.55,
+    );
+  }
+
   Future<void> stopAll() async {
+    cancelScheduledPlays();
     if (!_ready) return;
     try {
       for (final src in _soloud.activeSounds) {

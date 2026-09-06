@@ -3,6 +3,11 @@
 **Beat-maker first** phone music studio (Flutter mobile DAW).  
 Make drums and groove excellent inside a lean DAW shell — piano/guitar stay available, but we are **not** expanding toward a full BandLab clone (no AI drummer, live-loops marketplace, cloud sync, Autotune, etc.).
 
+## What’s new in 1.1.9
+
+- **Tighter clocked scheduling** — sequencer / metronome oneshots schedule to swung onset (delay) instead of firing immediately when the step enters the lookahead window
+- Lookahead ~60 ms; pending timers cancel on pause / stop / seek
+
 ## What’s new in 1.1.8
 
 - **12 drum kits** (trap/boom-bap/drill/lo-fi/house/techno/synthwave/electro + rock/indie/brush/punk) with improved procedural samples
@@ -49,9 +54,10 @@ Make drums and groove excellent inside a lean DAW shell — piano/guitar stay av
 
 ### Transport
 
-- Source of truth: `AudioEngine.transportSeconds`
-- Lookahead (~40 ms) schedules swung onsets
+- Source of truth: `AudioEngine.transportSeconds` (app Stopwatch; not SoLoud engine clock)
+- Lookahead (~60 ms) finds swung onsets; `playSampleClocked` delays to exact onset before SoLoud `play`
 - Timer (~8 ms) only polls UI + scheduler
+- **Limit:** `flutter_soloud` ^3.5.4 has no Dart `playClocked` / `playScheduled` (those need package ≥4.1 + Flutter ≥3.41). Scheduling uses a Timer delay after preload — tighter than immediate fire, not native sample-accurate.
 
 ### Sample licenses
 
@@ -60,6 +66,7 @@ Make drums and groove excellent inside a lean DAW shell — piano/guitar stay av
 
 ## Known limits
 
+- **Clocked scheduling:** Onsets are Timer-delayed to the swung musical time on the app transport clock. Native SoLoud `playClocked` / `playScheduled` are not exposed in flutter_soloud 3.5.4 (requires package ≥4.1 / Flutter ≥3.41). Sub-buffer sample accuracy is therefore not available yet; pause/stop/seek cancel pending timers.
 - **Pitch:** SoLoud uses playback-rate pitching. Melodic presets pick the **nearest multi-root** sample then rate-pitch residual semis (less stretch than a single root). Notes are hard-clamped to ±24 semitones past the outer roots; UI warns beyond ±12 from the nearest root.
 - **Reverb:** Freeverb needs stereo sources — drums and melodic samples are stereo so Freeverb can activate. Not a convolution hall.
 - **Mic record:** Armed-track capture from playhead, not sample-accurate punch-in / overdub.

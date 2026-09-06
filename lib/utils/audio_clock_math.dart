@@ -147,4 +147,28 @@ class AudioClockMath {
     out.sort((a, b) => a.onset.compareTo(b.onset));
     return out;
   }
+
+  /// Delay in seconds from [nowSec] until [onsetSec] (negative if overdue).
+  static double delayUntilOnset(double nowSec, double onsetSec) =>
+      onsetSec - nowSec;
+
+  /// Whether [onsetSec] is due now (already passed or within [epsilonSec]).
+  static bool isOnsetDue(
+    double nowSec,
+    double onsetSec, {
+    double epsilonSec = 0.0005,
+  }) =>
+      delayUntilOnset(nowSec, onsetSec) <= epsilonSec;
+
+  /// Timer delay from [nowSec] to [onsetSec], clamped to [0, maxDelaySec].
+  /// Used when flutter_soloud lacks playClocked (need ≥4.1 / Flutter ≥3.41).
+  static Duration scheduleDelay({
+    required double nowSec,
+    required double onsetSec,
+    double maxDelaySec = 2.0,
+  }) {
+    final d = delayUntilOnset(nowSec, onsetSec).clamp(0.0, maxDelaySec);
+    return Duration(microseconds: (d * 1e6).round());
+  }
+
 }
