@@ -50,7 +50,7 @@ Make drums and groove excellent inside a lean DAW shell — piano/guitar stay av
 ### Sample licenses
 
 `assets/samples/` = original synthetic WAVs via `tool/generate_samples.py` — **CC0**.  
-Drums are **stereo**; melodic packs are mono.
+**12 drum kits** (trap/boom-bap/drill/lo-fi/house/techno/synthwave/electro + rock/indie/brush/punk). Drums are **stereo**; melodic packs are mono.
 
 ## Known limits
 

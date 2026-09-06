@@ -24,15 +24,144 @@ class SoundPreset {
   final Map<String, String>? drumKit;
 }
 
-/// Built-in MVP library (synthetic samples — see README for licenses).
+/// Built-in library (synthetic samples — see assets/samples/LICENSE).
 class SoundLibrary {
   static const List<SoundPreset> all = [
-    // Drums
+    // —— Drums (hip-hop / trap / electronic first) ——
+    SoundPreset(
+      id: 'drums_trap',
+      name: 'Trap Heat',
+      category: TrackCategory.drums,
+      description: 'Deep 808 kick, crisp snare & clap, ticking hats for trap.',
+      samplePath: 'assets/samples/drums/trap_kick.wav',
+      rootMidi: 36,
+      colorValue: 0xFFE040FB,
+      drumKit: {
+        'Kick': 'assets/samples/drums/trap_kick.wav',
+        'Snare': 'assets/samples/drums/trap_snare.wav',
+        'Hat': 'assets/samples/drums/trap_hat.wav',
+        'Open Hat': 'assets/samples/drums/trap_open.wav',
+        'Clap': 'assets/samples/drums/trap_clap.wav',
+      },
+    ),
+    SoundPreset(
+      id: 'drums_boombap',
+      name: 'Boom Bap Classic',
+      category: TrackCategory.drums,
+      description: 'Dusty hip-hop kick/snare with rim and vintage hats.',
+      samplePath: 'assets/samples/drums/boombap_kick.wav',
+      rootMidi: 36,
+      colorValue: 0xFFFF8A65,
+      drumKit: {
+        'Kick': 'assets/samples/drums/boombap_kick.wav',
+        'Snare': 'assets/samples/drums/boombap_snare.wav',
+        'Hat': 'assets/samples/drums/boombap_hat.wav',
+        'Open Hat': 'assets/samples/drums/boombap_open.wav',
+        'Rim': 'assets/samples/drums/boombap_rim.wav',
+      },
+    ),
+    SoundPreset(
+      id: 'drums_drill',
+      name: 'Drill Dark',
+      category: TrackCategory.drums,
+      description: 'Low 808, snappy snare, dark ticking hats for drill.',
+      samplePath: 'assets/samples/drums/drill_kick.wav',
+      rootMidi: 36,
+      colorValue: 0xFF7E57C2,
+      drumKit: {
+        'Kick': 'assets/samples/drums/drill_kick.wav',
+        'Snare': 'assets/samples/drums/drill_snare.wav',
+        'Hat': 'assets/samples/drums/drill_hat.wav',
+        'Open Hat': 'assets/samples/drums/drill_open.wav',
+        'Perc': 'assets/samples/drums/drill_perc.wav',
+      },
+    ),
+    SoundPreset(
+      id: 'drums_lofi',
+      name: 'Lo-Fi Chill',
+      category: TrackCategory.drums,
+      description: 'Warm dusty drums and shaker for chill beats.',
+      samplePath: 'assets/samples/drums/lofi_kick.wav',
+      rootMidi: 36,
+      colorValue: 0xFFA1887F,
+      drumKit: {
+        'Kick': 'assets/samples/drums/lofi_kick.wav',
+        'Snare': 'assets/samples/drums/lofi_snare.wav',
+        'Hat': 'assets/samples/drums/lofi_hat.wav',
+        'Open Hat': 'assets/samples/drums/lofi_open.wav',
+        'Shaker': 'assets/samples/drums/lofi_perc.wav',
+      },
+    ),
+    SoundPreset(
+      id: 'drums_house',
+      name: 'House Pulse',
+      category: TrackCategory.drums,
+      description: 'Four-on-the-floor kick, clap, and bright house hats.',
+      samplePath: 'assets/samples/drums/house_kick.wav',
+      rootMidi: 36,
+      colorValue: 0xFF42A5F5,
+      drumKit: {
+        'Kick': 'assets/samples/drums/house_kick.wav',
+        'Clap': 'assets/samples/drums/house_clap.wav',
+        'Hat': 'assets/samples/drums/house_hat.wav',
+        'Open Hat': 'assets/samples/drums/house_open.wav',
+        'Perc': 'assets/samples/drums/house_perc.wav',
+      },
+    ),
+    SoundPreset(
+      id: 'drums_techno',
+      name: 'Techno Drive',
+      category: TrackCategory.drums,
+      description: 'Hard techno kick, industrial snare & metallic hats.',
+      samplePath: 'assets/samples/drums/techno_kick.wav',
+      rootMidi: 36,
+      colorValue: 0xFF26C6DA,
+      drumKit: {
+        'Kick': 'assets/samples/drums/techno_kick.wav',
+        'Snare': 'assets/samples/drums/techno_snare.wav',
+        'Hat': 'assets/samples/drums/techno_hat.wav',
+        'Open Hat': 'assets/samples/drums/techno_open.wav',
+        'Perc': 'assets/samples/drums/techno_perc.wav',
+      },
+    ),
+    SoundPreset(
+      id: 'drums_synthwave',
+      name: 'Synthwave Neon',
+      category: TrackCategory.drums,
+      description: 'Retro 80s kick/snare with clap and soft tom.',
+      samplePath: 'assets/samples/drums/synthwave_kick.wav',
+      rootMidi: 36,
+      colorValue: 0xFFEC407A,
+      drumKit: {
+        'Kick': 'assets/samples/drums/synthwave_kick.wav',
+        'Snare': 'assets/samples/drums/synthwave_snare.wav',
+        'Hat': 'assets/samples/drums/synthwave_hat.wav',
+        'Clap': 'assets/samples/drums/synthwave_clap.wav',
+        'Tom': 'assets/samples/drums/synthwave_tom.wav',
+      },
+    ),
+    SoundPreset(
+      id: 'drums_elec',
+      name: 'Club Electro',
+      category: TrackCategory.drums,
+      description: '808 kick, tight snare, clap & perc for electronic/hip-hop.',
+      samplePath: 'assets/samples/drums/elec_kick.wav',
+      rootMidi: 36,
+      colorValue: 0xFFBA68C8,
+      drumKit: {
+        'Kick': 'assets/samples/drums/elec_kick.wav',
+        'Snare': 'assets/samples/drums/elec_snare.wav',
+        'Hat': 'assets/samples/drums/elec_hat.wav',
+        'Clap': 'assets/samples/drums/elec_clap.wav',
+        'Perc': 'assets/samples/drums/elec_perc.wav',
+      },
+    ),
+    // —— Rock / indie ——
     SoundPreset(
       id: 'drums_rock',
       name: 'Acoustic Rock Kit',
       category: TrackCategory.drums,
-      description: 'Kick, snare, hats & tom for rock grooves.',
+      description: 'Punchier kick, clearer snare, hats & tom for rock grooves.',
       samplePath: 'assets/samples/drums/rock_kick.wav',
       rootMidi: 36,
       colorValue: 0xFFE07A3D,
@@ -45,19 +174,51 @@ class SoundLibrary {
       },
     ),
     SoundPreset(
-      id: 'drums_elec',
-      name: 'Electronic / Hip-Hop Kit',
+      id: 'drums_indie',
+      name: 'Indie Garage',
       category: TrackCategory.drums,
-      description: '808 kick, clap, tight hats & perc.',
-      samplePath: 'assets/samples/drums/elec_kick.wav',
+      description: 'Roomy indie kick/snare with open hats and tom fills.',
+      samplePath: 'assets/samples/drums/indie_kick.wav',
       rootMidi: 36,
-      colorValue: 0xFFFFB020,
+      colorValue: 0xFFFFB74D,
       drumKit: {
-        'Kick': 'assets/samples/drums/elec_kick.wav',
-        'Snare': 'assets/samples/drums/elec_snare.wav',
-        'Hat': 'assets/samples/drums/elec_hat.wav',
-        'Clap': 'assets/samples/drums/elec_clap.wav',
-        'Perc': 'assets/samples/drums/elec_perc.wav',
+        'Kick': 'assets/samples/drums/indie_kick.wav',
+        'Snare': 'assets/samples/drums/indie_snare.wav',
+        'Hat Closed': 'assets/samples/drums/indie_hat_closed.wav',
+        'Hat Open': 'assets/samples/drums/indie_hat_open.wav',
+        'Tom': 'assets/samples/drums/indie_tom.wav',
+      },
+    ),
+    SoundPreset(
+      id: 'drums_brush',
+      name: 'Soft Brush',
+      category: TrackCategory.drums,
+      description: 'Soft acoustic/brush feel for indie ballads & jazz-ish grooves.',
+      samplePath: 'assets/samples/drums/brush_kick.wav',
+      rootMidi: 36,
+      colorValue: 0xFF90A4AE,
+      drumKit: {
+        'Kick': 'assets/samples/drums/brush_kick.wav',
+        'Snare': 'assets/samples/drums/brush_snare.wav',
+        'Hat Closed': 'assets/samples/drums/brush_hat.wav',
+        'Hat Open': 'assets/samples/drums/brush_open.wav',
+        'Tom': 'assets/samples/drums/brush_tom.wav',
+      },
+    ),
+    SoundPreset(
+      id: 'drums_punk',
+      name: 'Punk Punch',
+      category: TrackCategory.drums,
+      description: 'Tight aggressive kick/snare for punk and power-pop.',
+      samplePath: 'assets/samples/drums/punk_kick.wav',
+      rootMidi: 36,
+      colorValue: 0xFFEF5350,
+      drumKit: {
+        'Kick': 'assets/samples/drums/punk_kick.wav',
+        'Snare': 'assets/samples/drums/punk_snare.wav',
+        'Hat Closed': 'assets/samples/drums/punk_hat_closed.wav',
+        'Hat Open': 'assets/samples/drums/punk_hat_open.wav',
+        'Tom': 'assets/samples/drums/punk_tom.wav',
       },
     ),
     // Bass
@@ -147,25 +308,13 @@ class SoundLibrary {
 
   static List<SoundPreset> byCategory(TrackCategory c) =>
       all.where((p) => p.category == c).toList();
+
+  /// Drum kits only (for pickers / counts).
+  static List<SoundPreset> get drumKits => byCategory(TrackCategory.drums);
 }
 
 /// Standard GM-ish drum pad MIDI mapping used in step seq / pads.
 class DrumPadMap {
-  static const List<String> rockOrder = [
-    'Kick',
-    'Snare',
-    'Hat Closed',
-    'Hat Open',
-    'Tom',
-  ];
-  static const List<String> elecOrder = [
-    'Kick',
-    'Snare',
-    'Hat',
-    'Clap',
-    'Perc',
-  ];
-
   /// Pitch used in NoteEvent for each pad index.
   static int pitchForPad(int padIndex) => 36 + padIndex;
 
