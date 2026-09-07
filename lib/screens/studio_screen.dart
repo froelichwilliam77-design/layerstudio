@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/track.dart';
 import '../services/studio_controller.dart';
 import '../theme/studio_theme.dart';
+import '../utils/share_sheet.dart';
 import '../widgets/arrange_view.dart';
 import '../widgets/drum_pads.dart';
 import '../widgets/empty_state.dart';
@@ -31,92 +34,101 @@ class StudioScreen extends StatelessWidget {
 
     final onBeatSurface = _isBeatSurface(c.tab);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(p.name),
-        actions: [
-          IconButton(
-            tooltip: 'Export project (.layerstudio)',
-            onPressed: () async {
-              final err = await c.exportProjectBundle();
-              if (context.mounted && err != null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Project export failed: $err')),
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) return;
+        c.stop();
+        unawaited(c.saveNow());
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(p.name),
+          actions: [
+            IconButton(
+              tooltip: 'Export project (.layerstudio)',
+              onPressed: () async {
+                final err = await c.exportProjectBundle(
+                  shareOrigin: shareSheetOrigin(context),
                 );
-              }
-            },
-            icon: const Icon(Icons.folder_zip_outlined),
-          ),
-          IconButton(
-            tooltip: 'Save',
-            onPressed: () async {
-              await c.saveNow();
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Saved')),
-                );
-              }
-            },
-            icon: const Icon(Icons.save_outlined),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Track hierarchy only where you pick what to edit (phone IA).
-          if (onBeatSurface) TrackRail(controller: c),
-          if (onBeatSurface)
-            const Divider(height: 1, color: StudioColors.border),
-          Expanded(child: _body(c)),
-          const TransportBar(),
-        ],
-      ),
-      bottomNavigationBar: NavigationBar(
-        height: 64,
-        backgroundColor: StudioColors.surface,
-        indicatorColor: StudioColors.accent.withValues(alpha: 0.25),
-        selectedIndex: _indexFor(c.tab),
-        onDestinationSelected: (i) {
-          if (i == 2) {
-            _openBeatSurface(c);
-          } else {
-            c.setTab(_tabFor(i));
-          }
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.view_timeline_outlined),
-            selectedIcon: Icon(Icons.view_timeline),
-            label: 'Arrange',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.library_music_outlined),
-            selectedIcon: Icon(Icons.library_music),
-            label: 'Sounds',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.grid_on_outlined),
-            selectedIcon: Icon(Icons.grid_on),
-            label: 'Beat',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.tune_outlined),
-            selectedIcon: Icon(Icons.tune),
-            label: 'Mixer',
-          ),
-        ],
+                if (context.mounted && err != null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Project export failed: $err')),
+                  );
+                }
+              },
+              icon: const Icon(Icons.folder_zip_outlined),
+            ),
+            IconButton(
+              tooltip: 'Save',
+              onPressed: () async {
+                await c.saveNow();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('Saved')));
+                }
+              },
+              icon: const Icon(Icons.save_outlined),
+            ),
+          ],
+        ),
+        body: Column(
+          children: [
+            // Track hierarchy only where you pick what to edit (phone IA).
+            if (onBeatSurface) TrackRail(controller: c),
+            if (onBeatSurface)
+              const Divider(height: 1, color: StudioColors.border),
+            Expanded(child: _body(c)),
+            const TransportBar(),
+          ],
+        ),
+        bottomNavigationBar: NavigationBar(
+          height: 64,
+          backgroundColor: StudioColors.surface,
+          indicatorColor: StudioColors.accent.withValues(alpha: 0.25),
+          selectedIndex: _indexFor(c.tab),
+          onDestinationSelected: (i) {
+            if (i == 2) {
+              _openBeatSurface(c);
+            } else {
+              c.setTab(_tabFor(i));
+            }
+          },
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.view_timeline_outlined),
+              selectedIcon: Icon(Icons.view_timeline),
+              label: 'Arrange',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.library_music_outlined),
+              selectedIcon: Icon(Icons.library_music),
+              label: 'Sounds',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.grid_on_outlined),
+              selectedIcon: Icon(Icons.grid_on),
+              label: 'Beat',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.tune_outlined),
+              selectedIcon: Icon(Icons.tune),
+              label: 'Mixer',
+            ),
+          ],
+        ),
       ),
     );
   }
 
   bool _isBeatSurface(StudioTab tab) => switch (tab) {
-        StudioTab.drums ||
-        StudioTab.piano ||
-        StudioTab.keys ||
-        StudioTab.guitar =>
-          true,
-        _ => false,
-      };
+    StudioTab.drums ||
+    StudioTab.piano ||
+    StudioTab.keys ||
+    StudioTab.guitar => true,
+    _ => false,
+  };
 
   /// Prefer drums as the primary Beat destination; keep current layer if already editing one.
   void _openBeatSurface(StudioController c) {
@@ -214,8 +226,8 @@ class _Editor extends StatelessWidget {
       TrackInstrumentMode.keyboard => TouchKeyboard(track: track),
       TrackInstrumentMode.pianoRoll => PianoRoll(track: track),
       TrackInstrumentMode.micRecord => const Center(
-          child: Text('Arm mic from Mixer / Arrange'),
-        ),
+        child: Text('Arm mic from Mixer / Arrange'),
+      ),
     };
   }
 }
@@ -309,8 +321,8 @@ class _EditorToolbar extends StatelessWidget {
       final value = mode == TrackInstrumentMode.fretboard
           ? 'fret'
           : mode == TrackInstrumentMode.keyboard
-              ? 'keys'
-              : 'piano';
+          ? 'keys'
+          : 'piano';
       return StudioSegmentedControl<String>(
         accent: color,
         value: value,
@@ -337,7 +349,7 @@ class _EditorToolbar extends StatelessWidget {
     if (track.category == TrackCategory.keys) {
       final onKeyboard =
           track.effectiveMode == TrackInstrumentMode.keyboard ||
-              (track.instrumentMode == null && c.tab == StudioTab.keys);
+          (track.instrumentMode == null && c.tab == StudioTab.keys);
       return StudioSegmentedControl<String>(
         accent: color,
         value: onKeyboard ? 'keyboard' : 'piano',
@@ -362,8 +374,8 @@ class _EditorToolbar extends StatelessWidget {
       final value = mode == TrackInstrumentMode.fretboard
           ? 'fret'
           : mode == TrackInstrumentMode.pianoRoll
-              ? 'piano'
-              : 'chords';
+          ? 'piano'
+          : 'chords';
       return StudioSegmentedControl<String>(
         accent: color,
         value: value,

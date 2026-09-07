@@ -12,6 +12,7 @@ import '../models/fx_settings.dart';
 import '../models/track.dart';
 import '../utils/dsp_simple.dart';
 import '../utils/music_theory.dart';
+import '../utils/share_sheet.dart';
 import '../utils/wav_codec.dart';
 
 /// Offline mixdown to WAV (PCM **16-bit stereo** @ 44.1 kHz with TPDF dither).
@@ -90,8 +91,8 @@ class ExportService {
         final pcm = await loadPcm(asset);
         if (pcm == null) continue;
 
-        final startSample =
-            (note.startStep * secondsPerStep * sampleRate).round();
+        final startSample = (note.startStep * secondsPerStep * sampleRate)
+            .round();
         final vel = (note.velocity / 127.0) * track.volume;
         final ratio = track.category == TrackCategory.drums
             ? 1.0
@@ -200,11 +201,12 @@ class ExportService {
     return file;
   }
 
-  Future<void> shareFile(File file) async {
+  Future<void> shareFile(File file, {Rect? shareOrigin}) async {
     await SharePlus.instance.share(
       ShareParams(
         files: [XFile(file.path, mimeType: 'audio/wav')],
         text: 'Made with LayerStudio',
+        sharePositionOrigin: shareOrigin ?? shareSheetOriginFallback,
       ),
     );
   }

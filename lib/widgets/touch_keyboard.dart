@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/track.dart';
@@ -34,72 +35,88 @@ class _TouchKeyboardState extends State<TouchKeyboard> {
           child: Row(
             children: [
               IconButton(
-                onPressed: () => setState(() => octave = (octave - 1).clamp(1, 6)),
+                onPressed: () =>
+                    setState(() => octave = (octave - 1).clamp(1, 6)),
                 icon: const Icon(Icons.keyboard_arrow_down),
               ),
-              Text('Octave $octave',
-                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              Text(
+                'Octave $octave',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
               IconButton(
-                onPressed: () => setState(() => octave = (octave + 1).clamp(1, 6)),
+                onPressed: () =>
+                    setState(() => octave = (octave + 1).clamp(1, 6)),
                 icon: const Icon(Icons.keyboard_arrow_up),
               ),
               const Spacer(),
-              const Text('Tap to play · hold playhead to record',
-                  style: TextStyle(fontSize: 11, color: StudioColors.textDim)),
+              const Text(
+                'Tap to play · hold playhead to record',
+                style: TextStyle(fontSize: 11, color: StudioColors.textDim),
+              ),
             ],
           ),
         ),
         Expanded(
-          child: LayoutBuilder(builder: (context, box) {
-            final whiteW = box.maxWidth / 7;
-            return Stack(
-              children: [
-                Row(
-                  children: [
-                    for (final pc in whites)
-                      _Key(
-                        width: whiteW,
-                        label: MusicTheory.noteName(base + pc),
-                        isBlack: false,
-                        highlight: MusicTheory.inScale(base + pc, p.key, p.scale),
-                        onTap: () => _hit(c, base + pc),
-                      ),
-                  ],
-                ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  top: 0,
-                  height: box.maxHeight * 0.58,
-                  child: Row(
+          child: LayoutBuilder(
+            builder: (context, box) {
+              final whiteW = box.maxWidth / 7;
+              return Stack(
+                children: [
+                  Row(
                     children: [
-                      SizedBox(width: whiteW * 0.65),
-                      for (var i = 0; i < blacks.length; i++) ...[
-                        if (blacks[i] < 0)
-                          SizedBox(width: whiteW)
-                        else
-                          _Key(
-                            width: whiteW * 0.7,
-                            label: '',
-                            isBlack: true,
-                            highlight: MusicTheory.inScale(
-                                base + blacks[i], p.key, p.scale),
-                            onTap: () => _hit(c, base + blacks[i]),
+                      for (final pc in whites)
+                        _Key(
+                          width: whiteW,
+                          label: MusicTheory.noteName(base + pc),
+                          isBlack: false,
+                          highlight: MusicTheory.inScale(
+                            base + pc,
+                            p.key,
+                            p.scale,
                           ),
-                        if (blacks[i] >= 0) SizedBox(width: whiteW * 0.3),
-                      ],
+                          onTap: () => _hit(c, base + pc),
+                        ),
                     ],
                   ),
-                ),
-              ],
-            );
-          }),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    top: 0,
+                    height: box.maxHeight * 0.58,
+                    child: Row(
+                      children: [
+                        SizedBox(width: whiteW * 0.65),
+                        for (var i = 0; i < blacks.length; i++) ...[
+                          if (blacks[i] < 0)
+                            SizedBox(width: whiteW)
+                          else
+                            _Key(
+                              width: whiteW * 0.7,
+                              label: '',
+                              isBlack: true,
+                              highlight: MusicTheory.inScale(
+                                base + blacks[i],
+                                p.key,
+                                p.scale,
+                              ),
+                              onTap: () => _hit(c, base + blacks[i]),
+                            ),
+                          if (blacks[i] >= 0) SizedBox(width: whiteW * 0.3),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
         ),
       ],
     );
   }
 
   void _hit(StudioController c, int midi) {
+    HapticFeedback.selectionClick();
     c.triggerNote(widget.track, midi);
     if (c.isPlaying) {
       c.addOrToggleNote(
@@ -134,7 +151,7 @@ class _Key extends StatelessWidget {
           ? (highlight ? const Color(0xFF3A4158) : const Color(0xFF10131A))
           : (highlight ? const Color(0xFF2A3348) : const Color(0xFF1A1F2B)),
       child: InkWell(
-        onTap: onTap,
+        onTapDown: (_) => onTap(),
         child: Container(
           width: width,
           decoration: BoxDecoration(

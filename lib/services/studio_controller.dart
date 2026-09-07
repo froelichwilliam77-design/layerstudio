@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' show Rect;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart' show AppLifecycleState;
@@ -14,6 +15,7 @@ import '../models/note_event.dart';
 import '../models/pattern.dart';
 import '../models/project.dart';
 import '../models/track.dart';
+import '../utils/app_lifecycle_policy.dart';
 import '../utils/audio_clock_math.dart';
 import '../utils/music_theory.dart';
 import 'audio_engine.dart';
@@ -32,10 +34,10 @@ class StudioController extends ChangeNotifier {
     ExportService? exporter,
     ProjectBundleService? bundle,
     MicRecorder? micRecorder,
-  })  : _store = store ?? ProjectStore(),
-        _exporter = exporter ?? ExportService(),
-        _bundle = bundle ?? ProjectBundleService(),
-        _mic = micRecorder ?? MicRecorder() {
+  }) : _store = store ?? ProjectStore(),
+       _exporter = exporter ?? ExportService(),
+       _bundle = bundle ?? ProjectBundleService(),
+       _mic = micRecorder ?? MicRecorder() {
     final engine = AudioEngine.instance;
     engine.onInterruption = ({required bool began}) {
       if (began) {
@@ -89,7 +91,6 @@ class StudioController extends ChangeNotifier {
   Timer? _poller;
   Timer? _autosaveTimer;
   bool _resumeAfterInterruption = false;
-  bool _resumeAfterLifecycle = false;
 
   int _scheduledThroughStep = -1;
   double _scheduledThroughOnset = -1;
@@ -116,8 +117,7 @@ class StudioController extends ChangeNotifier {
     recent = await _store.listProjects();
     try {
       final prefs = await SharedPreferences.getInstance();
-      exportBannerDismissed =
-          prefs.getBool('export_banner_dismissed') ?? false;
+      exportBannerDismissed = prefs.getBool('export_banner_dismissed') ?? false;
     } catch (_) {}
     notifyListeners();
   }
@@ -181,10 +181,7 @@ class StudioController extends ChangeNotifier {
     if (p == null) return;
     final pat = p.activePattern;
     for (final t in p.tracks) {
-      t.notes = pat
-          .notesFor(t.id)
-          .map((n) => n.copyWith())
-          .toList();
+      t.notes = pat.notesFor(t.id).map((n) => n.copyWith()).toList();
     }
   }
 
@@ -194,10 +191,7 @@ class StudioController extends ChangeNotifier {
     if (p == null) return;
     final pat = p.activePattern;
     for (final t in p.tracks) {
-      pat.setNotesFor(
-        t.id,
-        t.notes.map((n) => n.copyWith()).toList(),
-      );
+      pat.setNotesFor(t.id, t.notes.map((n) => n.copyWith()).toList());
     }
   }
 
@@ -293,11 +287,12 @@ class StudioController extends ChangeNotifier {
       colorValue: preset.colorValue,
       fx: FxSettings(
         ampPreset: switch (preset.category) {
-          TrackCategory.guitar => preset.id.contains('high')
-              ? AmpPreset.highGain
-              : preset.id.contains('crunch')
-                  ? AmpPreset.crunch
-                  : AmpPreset.clean,
+          TrackCategory.guitar =>
+            preset.id.contains('high')
+                ? AmpPreset.highGain
+                : preset.id.contains('crunch')
+                ? AmpPreset.crunch
+                : AmpPreset.clean,
           TrackCategory.bass =>
             preset.id.contains('driven') ? AmpPreset.bassDrive : AmpPreset.none,
           _ => AmpPreset.none,
@@ -421,7 +416,10 @@ class StudioController extends ChangeNotifier {
     );
   }
 
-  void _applyPatternSnapshot(int patternIndex, Map<String, List<dynamic>> snap) {
+  void _applyPatternSnapshot(
+    int patternIndex,
+    Map<String, List<dynamic>> snap,
+  ) {
     final p = project;
     if (p == null) return;
     final pat = p.patterns[patternIndex];
@@ -439,20 +437,27 @@ class StudioController extends ChangeNotifier {
 
   // --- Arrangement ---
 
-  void addArrangementClip({String? patternId, int? startBar, int lengthBars = 1}) {
+  void addArrangementClip({
+    String? patternId,
+    int? startBar,
+    int lengthBars = 1,
+  }) {
     final p = project;
     if (p == null) return;
     final pid = patternId ?? p.activePattern.id;
-    final start = startBar ??
+    final start =
+        startBar ??
         (p.arrangement.isEmpty
             ? 0
             : p.arrangement.map((c) => c.endBar).reduce(math.max));
-    p.arrangement.add(ArrangementClip(
-      id: _uuid.v4(),
-      patternId: pid,
-      startBar: start,
-      lengthBars: lengthBars.clamp(1, 32),
-    ));
+    p.arrangement.add(
+      ArrangementClip(
+        id: _uuid.v4(),
+        patternId: pid,
+        startBar: start,
+        lengthBars: lengthBars.clamp(1, 32),
+      ),
+    );
     p.arrangement.sort((a, b) => a.startBar.compareTo(b.startBar));
     notifyListeners();
   }
@@ -466,9 +471,9 @@ class StudioController extends ChangeNotifier {
     final p = project;
     if (p == null) return;
     final clip = p.arrangement.cast<ArrangementClip?>().firstWhere(
-          (c) => c?.id == id,
-          orElse: () => null,
-        );
+      (c) => c?.id == id,
+      orElse: () => null,
+    );
     if (clip == null) return;
     clip.startBar = newStartBar.clamp(0, 256);
     p.arrangement.sort((a, b) => a.startBar.compareTo(b.startBar));
@@ -503,9 +508,7 @@ class StudioController extends ChangeNotifier {
 
   Map<String, List<dynamic>> _snapshotTrackNotes(String trackId) {
     final track = project!.tracks.firstWhere((t) => t.id == trackId);
-    return {
-      trackId: track.notes.map((n) => n.toJson()).toList(),
-    };
+    return {trackId: track.notes.map((n) => n.toJson()).toList()};
   }
 
   void _applyTrackNotesSnapshot(Map<String, List<dynamic>> snap) {
@@ -586,8 +589,7 @@ class StudioController extends ChangeNotifier {
             'Far from nearest sample root — tone may stretch (SoLoud rate-pitch).';
       } else if (preset == null &&
           (MusicTheory.exceedsSoftRange(finalPitch, track.rootMidi))) {
-        pitchWarning =
-            'Pitch far from sample root (SoLoud rate-pitch).';
+        pitchWarning = 'Pitch far from sample root (SoLoud rate-pitch).';
       } else {
         pitchWarning = null;
       }
@@ -610,14 +612,16 @@ class StudioController extends ChangeNotifier {
           (n) => n.pitch == finalPitch && n.startStep == snapped,
         );
       } else {
-        track.notes.add(NoteEvent(
-          id: _uuid.v4(),
-          pitch: finalPitch,
-          startStep: snapped,
-          lengthSteps: lengthSteps,
-          velocity: velocity ?? drawVelocity,
-          probability: probability ?? drawProbability,
-        ));
+        track.notes.add(
+          NoteEvent(
+            id: _uuid.v4(),
+            pitch: finalPitch,
+            startStep: snapped,
+            lengthSteps: lengthSteps,
+            velocity: velocity ?? drawVelocity,
+            probability: probability ?? drawProbability,
+          ),
+        );
       }
     });
   }
@@ -636,14 +640,16 @@ class StudioController extends ChangeNotifier {
     _pushNotesEdit(on ? 'Add step' : 'Clear step', trackId, () {
       track.notes.removeWhere((n) => n.pitch == pitch && n.startStep == step);
       if (on) {
-        track.notes.add(NoteEvent(
-          id: _uuid.v4(),
-          pitch: pitch,
-          startStep: step,
-          lengthSteps: 1,
-          velocity: drawVelocity,
-          probability: probability ?? drawProbability,
-        ));
+        track.notes.add(
+          NoteEvent(
+            id: _uuid.v4(),
+            pitch: pitch,
+            startStep: step,
+            lengthSteps: 1,
+            velocity: drawVelocity,
+            probability: probability ?? drawProbability,
+          ),
+        );
       }
     });
   }
@@ -754,7 +760,8 @@ class StudioController extends ChangeNotifier {
     if (track.category != TrackCategory.drums &&
         track.category != TrackCategory.mic) {
       final preset = SoundLibrary.byId(track.presetId);
-      finalPitch = preset?.clampMidi(finalPitch) ??
+      finalPitch =
+          preset?.clampMidi(finalPitch) ??
           MusicTheory.clampPitch(finalPitch, track.rootMidi);
     }
     final snapped = (startStep ~/ snapSteps) * snapSteps;
@@ -762,14 +769,16 @@ class StudioController extends ChangeNotifier {
       (n) => n.pitch == finalPitch && n.startStep == snapped,
     );
     if (on) {
-      track.notes.add(NoteEvent(
-        id: _uuid.v4(),
-        pitch: finalPitch,
-        startStep: snapped,
-        lengthSteps: lengthSteps,
-        velocity: velocity ?? drawVelocity,
-        probability: probability ?? drawProbability,
-      ));
+      track.notes.add(
+        NoteEvent(
+          id: _uuid.v4(),
+          pitch: finalPitch,
+          startStep: snapped,
+          lengthSteps: lengthSteps,
+          velocity: velocity ?? drawVelocity,
+          probability: probability ?? drawProbability,
+        ),
+      );
     }
     notifyListeners();
   }
@@ -787,14 +796,16 @@ class StudioController extends ChangeNotifier {
     final pitch = DrumPadMap.pitchForPad(padIndex);
     track.notes.removeWhere((n) => n.pitch == pitch && n.startStep == step);
     if (on) {
-      track.notes.add(NoteEvent(
-        id: _uuid.v4(),
-        pitch: pitch,
-        startStep: step,
-        lengthSteps: 1,
-        velocity: drawVelocity,
-        probability: drawProbability,
-      ));
+      track.notes.add(
+        NoteEvent(
+          id: _uuid.v4(),
+          pitch: pitch,
+          startStep: step,
+          lengthSteps: 1,
+          velocity: drawVelocity,
+          probability: drawProbability,
+        ),
+      );
     }
     notifyListeners();
   }
@@ -923,8 +934,8 @@ class StudioController extends ChangeNotifier {
       return;
     }
     final preset = SoundLibrary.byId(track.presetId);
-    final clamped = preset?.clampMidi(midi) ??
-        MusicTheory.clampPitch(midi, track.rootMidi);
+    final clamped =
+        preset?.clampMidi(midi) ?? MusicTheory.clampPitch(midi, track.rootMidi);
     final resolved =
         preset?.resolveRoot(clamped) ??
         (path: track.sampleRoot, rootMidi: track.rootMidi);
@@ -981,8 +992,8 @@ class StudioController extends ChangeNotifier {
       return;
     }
     final preset = SoundLibrary.byId(track.presetId);
-    final clamped = preset?.clampMidi(midi) ??
-        MusicTheory.clampPitch(midi, track.rootMidi);
+    final clamped =
+        preset?.clampMidi(midi) ?? MusicTheory.clampPitch(midi, track.rootMidi);
     final resolved =
         preset?.resolveRoot(clamped) ??
         (path: track.sampleRoot, rootMidi: track.rootMidi);
@@ -1055,13 +1066,15 @@ class StudioController extends ChangeNotifier {
             t.recordArmed = false;
             // Place a clip note at record start (approx playhead at arm time = 0 for MVP).
             if (t.notes.isEmpty) {
-              t.notes.add(NoteEvent(
-                id: _uuid.v4(),
-                pitch: 60,
-                startStep: 0,
-                lengthSteps: p.loopEndStep.clamp(1, p.totalSteps),
-                velocity: 100,
-              ));
+              t.notes.add(
+                NoteEvent(
+                  id: _uuid.v4(),
+                  pitch: 60,
+                  startStep: 0,
+                  lengthSteps: p.loopEndStep.clamp(1, p.totalSteps),
+                  velocity: 100,
+                ),
+              );
             }
           }
         }
@@ -1100,8 +1113,11 @@ class StudioController extends ChangeNotifier {
       final origin = AudioClockMath.stepToSeconds(playheadStep, p.bpm);
       engine.startTransportClock(originSeconds: origin);
       _scheduledThroughStep = playheadStep - 1;
-      _scheduledThroughOnset =
-          AudioClockMath.stepOnsetSeconds(playheadStep - 1, p.bpm, p.swingPercent);
+      _scheduledThroughOnset = AudioClockMath.stepOnsetSeconds(
+        playheadStep - 1,
+        p.bpm,
+        p.swingPercent,
+      );
       unawaited(_startMicIfArmed());
     }
 
@@ -1149,23 +1165,17 @@ class StudioController extends ChangeNotifier {
   void togglePlay() => isPlaying ? pause() : play();
 
   void onAppLifecycle(AppLifecycleState state) {
-    switch (state) {
-      case AppLifecycleState.inactive:
-      case AppLifecycleState.paused:
-      case AppLifecycleState.hidden:
-        if (isPlaying) {
-          _resumeAfterLifecycle = true;
-          pause();
-        }
+    switch (transportActionForLifecycle(state)) {
+      case TransportLifecycleAction.none:
         break;
-      case AppLifecycleState.resumed:
-        if (_resumeAfterLifecycle) {
-          _resumeAfterLifecycle = false;
-        }
-        break;
-      case AppLifecycleState.detached:
+      case TransportLifecycleAction.pauseAndSave:
+        if (isPlaying) pause();
+        unawaited(saveNow());
+      case TransportLifecycleAction.reactivateSession:
+        unawaited(AudioEngine.instance.activateSession());
+      case TransportLifecycleAction.stopAndSave:
         stop();
-        break;
+        unawaited(saveNow());
     }
   }
 
@@ -1353,10 +1363,12 @@ class StudioController extends ChangeNotifier {
       if (_firedKeys.contains(key)) continue;
       _firedKeys.add(key);
       final accent = item.step % p.stepsPerBar == 0;
-      unawaited(AudioEngine.instance.playMetronomeClickClocked(
-        accent: accent,
-        onsetSeconds: item.onset,
-      ));
+      unawaited(
+        AudioEngine.instance.playMetronomeClickClocked(
+          accent: accent,
+          onsetSeconds: item.onset,
+        ),
+      );
     }
   }
 
@@ -1413,12 +1425,14 @@ class StudioController extends ChangeNotifier {
       final pad = DrumPadMap.padIndexForPitch(note.pitch);
       unawaited(triggerPadClocked(track, pad, onsetSeconds: onsetSeconds));
     } else {
-      unawaited(triggerNoteClocked(
-        track,
-        note.pitch,
-        velocity: vel,
-        onsetSeconds: onsetSeconds,
-      ));
+      unawaited(
+        triggerNoteClocked(
+          track,
+          note.pitch,
+          velocity: vel,
+          onsetSeconds: onsetSeconds,
+        ),
+      );
     }
   }
 
@@ -1426,13 +1440,13 @@ class StudioController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<String?> exportAndShare() async {
+  Future<String?> exportAndShare({Rect? shareOrigin}) async {
     final p = project;
     if (p == null) return 'No project open';
     try {
       pause();
       final file = await _exporter.exportWav(p);
-      await _exporter.shareFile(file);
+      await _exporter.shareFile(file, shareOrigin: shareOrigin);
       return null;
     } catch (e, st) {
       ErrorLog.instance.record(e, st);
@@ -1440,12 +1454,12 @@ class StudioController extends ChangeNotifier {
     }
   }
 
-  Future<String?> exportProjectBundle() async {
+  Future<String?> exportProjectBundle({Rect? shareOrigin}) async {
     final p = project;
     if (p == null) return 'No project open';
     try {
       await saveNow();
-      await _bundle.shareProject(p);
+      await _bundle.shareProject(p, shareOrigin: shareOrigin);
       return null;
     } catch (e, st) {
       ErrorLog.instance.record(e, st);
@@ -1457,6 +1471,19 @@ class StudioController extends ChangeNotifier {
     try {
       stop();
       final imported = await _bundle.importFromFile(file);
+      await openProject(imported);
+      await refreshRecent();
+      return null;
+    } catch (e, st) {
+      ErrorLog.instance.record(e, st);
+      return e.toString();
+    }
+  }
+
+  Future<String?> importProjectBytes(Uint8List bytes) async {
+    try {
+      stop();
+      final imported = await _bundle.importFromBytes(bytes);
       await openProject(imported);
       await refreshRecent();
       return null;

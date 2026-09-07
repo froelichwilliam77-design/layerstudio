@@ -9,17 +9,25 @@
 ### Why it exists
 Most phone “studios” chase BandLab-scale features. LayerStudio stays focused: **excellent beat-making** inside a small DAW shell. Piano/guitar are available; we are **not** building AI drummer, live-loops marketplace, cloud sync, or Autotune.
 
-### Snapshot (1.1.10)
+### Snapshot (1.1.11)
 | | |
 |---|---|
 | Drums | 12 procedural kits (trap → punk), pads + 16-step, swing, probability |
 | Layers | Bass / keys / guitar with multi-root samples + live Freeverb |
 | Structure | Pattern bank A–D, song arrange, undo/redo |
 | Share | Stereo 16-bit WAV (TPDF dither) · `.layerstudio` project zip |
-| Platforms | Android (signed APK via CI when secrets set) · iOS unsigned CI artifact |
+| Platforms | Android (signed APK via CI when secrets set) · iOS (CocoaPods + unsigned CI artifact) |
 
 **Try it:** clone → `flutter pub get` → `flutter run` (see [Run](#run)). Screenshots / demo GIF welcome in PRs — drop them under `docs/` and link here.
 
+
+## What’s new in 1.1.11
+
+- **iOS project is runnable** — CocoaPods `Podfile`, Pods xcconfigs, privacy manifest, `.layerstudio` UTI, background audio mode, dark launch screen
+- **iPad share sheet** no longer crashes (popover origin)
+- **Control Center / notification shade** no longer pauses the beat (`inactive` vs real background)
+- Pads / keys fire on touch-down with haptics; leaving the studio saves and stops audio
+- Import reads file bytes (iOS Files picker often has no path)
 
 ## What’s new in 1.1.10
 
@@ -69,7 +77,7 @@ Most phone “studios” chase BandLab-scale features. LayerStudio stays focused
 | Export MP3 | Stubbed |
 | CI analyze + test | Working |
 | Android release-signed APKs | Working (when secrets set) |
-| iOS unsigned CI artifact | Working (no TestFlight without Apple certs) |
+| iOS unsigned CI artifact | Working (`Podfile` + `flutter build ios --no-codesign`; no TestFlight without Apple certs) |
 
 ## Audio engine
 
@@ -111,6 +119,21 @@ flutter pub get
 flutter run
 ```
 
+### iOS (Mac + Xcode)
+
+1. Install [Xcode](https://developer.apple.com/xcode/) and CocoaPods (`sudo gem install cocoapods` or Homebrew).
+2. Open **`ios/Runner.xcworkspace`** (not `.xcodeproj`) after `flutter pub get`.
+3. Select a **Team** under Runner → Signing & Capabilities for a physical device. Simulator does not need a paid team.
+4. Run:
+
+```bash
+flutter pub get
+cd ios && pod install && cd ..
+flutter run -d ios
+```
+
+Unsigned CI builds (`build-ios.yml`) produce a `.app` zip for inspection only — they cannot be installed on a device or uploaded to TestFlight until Apple certificates and a provisioning profile are added.
+
 Regenerate samples:
 
 ```bash
@@ -121,7 +144,7 @@ python3 tool/generate_samples.py
 
 - `.github/workflows/ci.yml` — analyze + test on PR/push to main  
 - `.github/workflows/build-apk-release.yml` — workflow_dispatch / tags → signed APKs when secrets present  
-- `.github/workflows/build-ios.yml` — `flutter build ios --no-codesign` + artifact (no TestFlight upload)
+- `.github/workflows/build-ios.yml` — CocoaPods + `flutter build ios --no-codesign` + artifact (no TestFlight upload)
 
 ## Project layout
 

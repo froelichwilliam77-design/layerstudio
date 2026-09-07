@@ -1,7 +1,7 @@
 name: layerstudio
 description: Beat-maker-first phone music studio (mobile DAW) — LayerStudio.
 publish_to: 'none'
-version: 1.1.10+13
+version: 1.1.11+14
 
 environment:
   sdk: ^3.9.0

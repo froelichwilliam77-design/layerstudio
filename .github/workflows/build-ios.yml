@@ -8,6 +8,7 @@ on:
       - 'lib/**'
       - 'ios/**'
       - 'pubspec.yaml'
+      - 'pubspec.lock'
       - '.github/workflows/build-ios.yml'
 
 jobs:
@@ -30,6 +31,9 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Precache iOS artifacts
+        run: flutter precache --ios
 
       - name: Build iOS without codesign
         run: flutter build ios --release --no-codesign
@@ -58,3 +62,5 @@ jobs:
         run: |
           echo "Unsigned build only. TestFlight / App Store upload requires Apple Developer certs,"
           echo "provisioning profiles, and a separate signing pipeline — not faked by this workflow."
+          echo "On a Mac with a team: open ios/Runner.xcworkspace (not .xcodeproj), select a Team, then"
+          echo "flutter run / Product → Archive."
