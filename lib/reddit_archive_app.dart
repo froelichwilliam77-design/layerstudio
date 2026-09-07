@@ -295,26 +295,28 @@ class _ArchiveSearchScreenState extends State<ArchiveSearchScreen> {
       context: context,
       backgroundColor: const Color(0xFF1B2737),
       showDragHandle: true,
-      builder: (_) => const Padding(
-        padding: EdgeInsets.fromLTRB(24, 8, 24, 34),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Public archive, responsible use',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-            ),
-            SizedBox(height: 12),
-            Text(
-              'Trace surfaces only publicly available, archive-provided records. It is not a people-search product and should not be used to target, harass, or identify individuals.',
-            ),
-            SizedBox(height: 12),
-            Text(
-              'Archive copies can be incomplete, outdated, or removed at the source. Verify important claims against the original public context.',
-              style: TextStyle(color: Color(0xFFAEBBD0)),
-            ),
-          ],
+      builder: (_) => const SingleChildScrollView(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(24, 8, 24, 34),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Public archive, responsible use',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+              ),
+              SizedBox(height: 12),
+              Text(
+                'Trace surfaces only publicly available, archive-provided records. It is not a people-search product and should not be used to target, harass, or identify individuals.',
+              ),
+              SizedBox(height: 12),
+              Text(
+                'Archive copies can be incomplete, outdated, or removed at the source. Verify important claims against the original public context.',
+                style: TextStyle(color: Color(0xFFAEBBD0)),
+              ),
+            ],
+          ),
         ),
       ),
     );
