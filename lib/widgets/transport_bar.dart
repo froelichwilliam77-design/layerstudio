@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../services/error_log.dart';
+import '../services/export_service.dart';
 import '../services/studio_controller.dart';
 import '../theme/studio_theme.dart';
 import '../utils/share_sheet.dart';
@@ -130,10 +131,40 @@ class _TransportBarState extends State<TransportBar> {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Export WAV',
+                  tooltip: 'Export mix',
                   onPressed: () async {
+                    final format = await showModalBottomSheet<MixExportFormat>(
+                      context: context,
+                      backgroundColor: StudioColors.surface,
+                      builder: (ctx) => SafeArea(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const ListTile(title: Text('Export mix')),
+                            ListTile(
+                              title: const Text('WAV 16-bit (dithered)'),
+                              onTap: () =>
+                                  Navigator.pop(ctx, MixExportFormat.wav16),
+                            ),
+                            ListTile(
+                              title: const Text('WAV 24-bit'),
+                              onTap: () =>
+                                  Navigator.pop(ctx, MixExportFormat.wav24),
+                            ),
+                            ListTile(
+                              title: const Text('MP3 192 kbps'),
+                              subtitle: const Text('Bundled LAME encoder (LGPL)'),
+                              onTap: () =>
+                                  Navigator.pop(ctx, MixExportFormat.mp3),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                    if (format == null || !context.mounted) return;
                     final err = await c.exportAndShare(
                       shareOrigin: shareSheetOrigin(context),
+                      format: format,
                     );
                     if (context.mounted && err != null) {
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -178,8 +209,10 @@ class _TransportBarState extends State<TransportBar> {
                     divisions: 20,
                     value: p.swingPercent.toDouble(),
                     label: '${p.swingPercent}%',
+                    onChangeStart: (_) => c.beginGestureUndo(),
                     onChanged: (v) =>
-                        c.updateProjectMeta(swingPercent: v.round()),
+                        c.updateProjectMeta(swingPercent: v.round(), recordUndo: false),
+                    onChangeEnd: (_) => c.endGestureUndo('Swing'),
                   ),
                 ),
                 PopupMenuButton<int>(

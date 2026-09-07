@@ -46,6 +46,28 @@ class CommandStack {
   }
 }
 
+/// Full project JSON snapshot (mixer, arrange, meta, FX).
+class JsonSnapshotCommand implements StudioCommand {
+  JsonSnapshotCommand({
+    required this.label,
+    required this.apply,
+    required this.before,
+    required this.after,
+  });
+
+  @override
+  final String label;
+  final void Function(String json) apply;
+  final String before;
+  final String after;
+
+  @override
+  void execute() => apply(after);
+
+  @override
+  void undo() => apply(before);
+}
+
 /// Captures before/after note lists for one or more tracks.
 class NotesSnapshotCommand implements StudioCommand {
   NotesSnapshotCommand({

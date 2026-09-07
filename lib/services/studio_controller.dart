@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' show Rect;
@@ -17,14 +18,20 @@ import '../models/project.dart';
 import '../models/track.dart';
 import '../utils/app_lifecycle_policy.dart';
 import '../utils/audio_clock_math.dart';
+import '../utils/mixer_routing.dart';
 import '../utils/music_theory.dart';
+import '../utils/wav_codec.dart';
 import 'audio_engine.dart';
 import 'command_stack.dart';
 import 'error_log.dart';
 import 'export_service.dart';
 import 'mic_recorder.dart';
+import 'midi_input.dart';
+import 'project_backup.dart';
 import 'project_bundle.dart';
 import 'project_store.dart';
+import 'studio_audio_handler.dart';
+import 'user_sample_store.dart';
 
 enum StudioTab { arrange, drums, piano, keys, guitar, mixer, library }
 
@@ -59,9 +66,13 @@ class StudioController extends ChangeNotifier {
   final ExportService _exporter;
   final ProjectBundleService _bundle;
   final MicRecorder _mic;
+  final UserSampleStore _userSamples = UserSampleStore();
+  final ProjectBackup backup = ProjectBackup();
+  final MidiInputService midi = MidiInputService();
   final _uuid = const Uuid();
   final CommandStack commands = CommandStack();
   final math.Random _rng = math.Random();
+  StudioAudioHandler? audioHandler;
 
   List<StudioProject> recent = [];
   StudioProject? project;
@@ -84,9 +95,13 @@ class StudioController extends ChangeNotifier {
   String? pitchWarning;
 
   bool exportBannerDismissed = false;
+  bool onboarded = true;
   bool isRecordingMic = false;
   bool isCountingIn = false;
   int countInStepsRemaining = 0;
+  int? _recordStartStep;
+  String? _recordTrackId;
+  String? _gestureBefore;
 
   Timer? _poller;
   Timer? _autosaveTimer;
@@ -112,12 +127,47 @@ class StudioController extends ChangeNotifier {
   Future<void> bootstrap() async {
     await AudioEngine.instance.init();
     await AudioEngine.instance.preload(
-      SoundLibrary.all.expand((p) => p.allSamplePaths),
+      SoundLibrary.bundled.expand((p) => p.allSamplePaths),
     );
+    try {
+      SoundLibrary.userPresets
+        ..clear()
+        ..addAll(await _userSamples.loadAll());
+      for (final preset in SoundLibrary.userPresets) {
+        if (preset.samplePath.startsWith('/')) {
+          await AudioEngine.instance.loadFile(preset.samplePath);
+        }
+      }
+    } catch (e, st) {
+      ErrorLog.instance.record(e, st);
+    }
     recent = await _store.listProjects();
     try {
       final prefs = await SharedPreferences.getInstance();
       exportBannerDismissed = prefs.getBool('export_banner_dismissed') ?? false;
+      onboarded = prefs.getBool('studio_onboarded') ?? false;
+    } catch (_) {}
+    midi.onNoteOn = _onMidiNoteOn;
+    midi.onClockBpm = (bpm) {
+      updateProjectMeta(bpm: bpm, recordUndo: false);
+    };
+    notifyListeners();
+  }
+
+  void attachAudioHandler(StudioAudioHandler handler) {
+    audioHandler = handler;
+    _syncNowPlaying();
+  }
+
+  void _syncNowPlaying() {
+    audioHandler?.setProject(project?.name ?? 'LayerStudio', playing: isPlaying);
+  }
+
+  Future<void> completeOnboarding() async {
+    onboarded = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('studio_onboarded', true);
     } catch (_) {}
     notifyListeners();
   }
@@ -253,24 +303,105 @@ class StudioController extends ChangeNotifier {
     bool? metronomeEnabled,
     int? countInBars,
     bool? songMode,
+    bool? cueMode,
+    int? latencyCompensationMs,
+    bool recordUndo = true,
   }) {
     final p = project;
     if (p == null) return;
-    if (name != null) p.name = name;
-    if (bpm != null) p.bpm = bpm.clamp(40, 240);
-    if (key != null) p.key = key;
-    if (scale != null) p.scale = scale;
-    if (bars != null) {
-      p.bars = bars.clamp(1, 32);
-      p.loopEndStep = p.bars * p.stepsPerBar;
+    void apply() {
+      if (name != null) p.name = name;
+      if (bpm != null) p.bpm = bpm.clamp(40, 240);
+      if (key != null) p.key = key;
+      if (scale != null) p.scale = scale;
+      if (bars != null) {
+        p.bars = bars.clamp(1, 32);
+        p.loopEndStep = p.bars * p.stepsPerBar;
+      }
+      if (loopEnabled != null) p.loopEnabled = loopEnabled;
+      if (loopStartStep != null) p.loopStartStep = loopStartStep;
+      if (loopEndStep != null) p.loopEndStep = loopEndStep;
+      if (swingPercent != null) p.swingPercent = swingPercent.clamp(0, 100);
+      if (metronomeEnabled != null) p.metronomeEnabled = metronomeEnabled;
+      if (countInBars != null) p.countInBars = countInBars.clamp(0, 2);
+      if (songMode != null) p.songMode = songMode;
+      if (cueMode != null) p.cueMode = cueMode;
+      if (latencyCompensationMs != null) {
+        p.latencyCompensationMs = latencyCompensationMs.clamp(0, 250);
+      }
     }
-    if (loopEnabled != null) p.loopEnabled = loopEnabled;
-    if (loopStartStep != null) p.loopStartStep = loopStartStep;
-    if (loopEndStep != null) p.loopEndStep = loopEndStep;
-    if (swingPercent != null) p.swingPercent = swingPercent.clamp(0, 100);
-    if (metronomeEnabled != null) p.metronomeEnabled = metronomeEnabled;
-    if (countInBars != null) p.countInBars = countInBars.clamp(0, 2);
-    if (songMode != null) p.songMode = songMode;
+
+    if (recordUndo &&
+        (name != null ||
+            bpm != null ||
+            key != null ||
+            scale != null ||
+            bars != null ||
+            songMode != null ||
+            cueMode != null ||
+            latencyCompensationMs != null)) {
+      captureUndo('Project settings', apply);
+    } else {
+      apply();
+      notifyListeners();
+    }
+  }
+
+  void captureUndo(String label, VoidCallback mutate) {
+    final p = project;
+    if (p == null) return;
+    final before = jsonEncode(p.toJson());
+    mutate();
+    final after = jsonEncode(p.toJson());
+    if (before == after) {
+      notifyListeners();
+      return;
+    }
+    commands.push(
+      JsonSnapshotCommand(
+        label: label,
+        apply: _restoreProjectJson,
+        before: before,
+        after: after,
+      ),
+      executeNow: false,
+    );
+    notifyListeners();
+  }
+
+  void beginGestureUndo() {
+    _gestureBefore = project == null ? null : jsonEncode(project!.toJson());
+  }
+
+  void endGestureUndo(String label) {
+    final p = project;
+    final before = _gestureBefore;
+    _gestureBefore = null;
+    if (p == null || before == null) return;
+    final after = jsonEncode(p.toJson());
+    if (before == after) return;
+    commands.push(
+      JsonSnapshotCommand(
+        label: label,
+        apply: _restoreProjectJson,
+        before: before,
+        after: after,
+      ),
+      executeNow: false,
+    );
+    notifyListeners();
+  }
+
+  void _restoreProjectJson(String raw) {
+    final decoded = StudioProject.fromJson(
+      jsonDecode(raw) as Map<String, dynamic>,
+    );
+    project = decoded;
+    if (selectedTrackId == null ||
+        !decoded.tracks.any((t) => t.id == selectedTrackId)) {
+      selectedTrackId = decoded.tracks.isNotEmpty ? decoded.tracks.first.id : null;
+    }
+    _hydrateActivePatternNotes();
     notifyListeners();
   }
 
@@ -310,6 +441,29 @@ class StudioController extends ChangeNotifier {
     return track;
   }
 
+  Future<SoundPreset?> importUserSample({
+    required Uint8List bytes,
+    required String originalName,
+    required TrackCategory category,
+  }) async {
+    try {
+      final preset = await _userSamples.importWav(
+        bytes: bytes,
+        originalName: originalName,
+        category: category,
+      );
+      SoundLibrary.userPresets.add(preset);
+      if (preset.samplePath.startsWith('/')) {
+        await AudioEngine.instance.loadFile(preset.samplePath);
+      }
+      notifyListeners();
+      return preset;
+    } catch (e, st) {
+      ErrorLog.instance.record(e, st);
+      return null;
+    }
+  }
+
   Future<Track> addMicTrack() async {
     final p = project;
     if (p == null) throw StateError('No project');
@@ -331,21 +485,38 @@ class StudioController extends ChangeNotifier {
   }
 
   void removeTrack(String id) {
-    final p = project;
-    if (p == null) return;
-    p.tracks.removeWhere((t) => t.id == id);
-    for (final pat in p.patterns) {
-      pat.notesByTrackId.remove(id);
-    }
-    if (selectedTrackId == id) {
-      selectedTrackId = p.tracks.isNotEmpty ? p.tracks.first.id : null;
-    }
-    notifyListeners();
+    captureUndo('Remove track', () {
+      final p = project;
+      if (p == null) return;
+      p.tracks.removeWhere((t) => t.id == id);
+      for (final pat in p.patterns) {
+        pat.notesByTrackId.remove(id);
+      }
+      if (selectedTrackId == id) {
+        selectedTrackId = p.tracks.isNotEmpty ? p.tracks.first.id : null;
+      }
+    });
   }
 
   void updateTrack(Track track) {
     notifyListeners();
   }
+
+  void toggleMute(Track track) =>
+      captureUndo('Mute', () => track.muted = !track.muted);
+
+  void toggleSolo(Track track) =>
+      captureUndo('Solo', () => track.solo = !track.solo);
+
+  void toggleCue(Track track) {
+    captureUndo('Cue', () {
+      track.cue = !track.cue;
+      if (track.cue) project?.cueMode = true;
+    });
+  }
+
+  void toggleOverdub(Track track) =>
+      captureUndo('Overdub', () => track.overdub = !track.overdub);
 
   void setDrawProbability(int v) {
     drawProbability = v.clamp(0, 100);
@@ -442,29 +613,31 @@ class StudioController extends ChangeNotifier {
     int? startBar,
     int lengthBars = 1,
   }) {
-    final p = project;
-    if (p == null) return;
-    final pid = patternId ?? p.activePattern.id;
-    final start =
-        startBar ??
-        (p.arrangement.isEmpty
-            ? 0
-            : p.arrangement.map((c) => c.endBar).reduce(math.max));
-    p.arrangement.add(
-      ArrangementClip(
-        id: _uuid.v4(),
-        patternId: pid,
-        startBar: start,
-        lengthBars: lengthBars.clamp(1, 32),
-      ),
-    );
-    p.arrangement.sort((a, b) => a.startBar.compareTo(b.startBar));
-    notifyListeners();
+    captureUndo('Add clip', () {
+      final p = project;
+      if (p == null) return;
+      final pid = patternId ?? p.activePattern.id;
+      final start =
+          startBar ??
+          (p.arrangement.isEmpty
+              ? 0
+              : p.arrangement.map((c) => c.endBar).reduce(math.max));
+      p.arrangement.add(
+        ArrangementClip(
+          id: _uuid.v4(),
+          patternId: pid,
+          startBar: start,
+          lengthBars: lengthBars.clamp(1, 32),
+        ),
+      );
+      p.arrangement.sort((a, b) => a.startBar.compareTo(b.startBar));
+    });
   }
 
   void removeArrangementClip(String id) {
-    project?.arrangement.removeWhere((c) => c.id == id);
-    notifyListeners();
+    captureUndo('Remove clip', () {
+      project?.arrangement.removeWhere((c) => c.id == id);
+    });
   }
 
   void moveArrangementClip(String id, int newStartBar) {
@@ -478,6 +651,56 @@ class StudioController extends ChangeNotifier {
     clip.startBar = newStartBar.clamp(0, 256);
     p.arrangement.sort((a, b) => a.startBar.compareTo(b.startBar));
     notifyListeners();
+  }
+
+  void resizeArrangementClip(String id, int lengthBars) {
+    captureUndo('Resize clip', () {
+      final p = project;
+      if (p == null) return;
+      for (final c in p.arrangement) {
+        if (c.id == id) {
+          c.lengthBars = lengthBars.clamp(1, 32);
+          break;
+        }
+      }
+    });
+  }
+
+  void duplicateArrangementClip(String id) {
+    captureUndo('Duplicate clip', () {
+      final p = project;
+      if (p == null) return;
+      ArrangementClip? clip;
+      for (final c in p.arrangement) {
+        if (c.id == id) {
+          clip = c;
+          break;
+        }
+      }
+      if (clip == null) return;
+      p.arrangement.add(
+        ArrangementClip(
+          id: _uuid.v4(),
+          patternId: clip.patternId,
+          startBar: clip.endBar,
+          lengthBars: clip.lengthBars,
+        ),
+      );
+      p.arrangement.sort((a, b) => a.startBar.compareTo(b.startBar));
+    });
+  }
+
+  void setArrangementClipPattern(String id, String patternId) {
+    captureUndo('Clip pattern', () {
+      final p = project;
+      if (p == null) return;
+      for (final c in p.arrangement) {
+        if (c.id == id) {
+          c.patternId = patternId;
+          break;
+        }
+      }
+    });
   }
 
   Pattern? patternById(String id) {
@@ -1011,10 +1234,18 @@ class StudioController extends ChangeNotifier {
   bool _trackAudible(Track track) {
     final p = project;
     if (p == null) return false;
-    if (track.muted) return false;
-    final anySolo = p.tracks.any((t) => t.solo);
-    if (anySolo && !track.solo) return false;
-    return true;
+    return isTrackAudible(track, project: p);
+  }
+
+  void _onMidiNoteOn(int midiNote, int velocity) {
+    final track = selectedTrack;
+    if (track == null) return;
+    final vel = (velocity / 127.0).clamp(0.05, 1.0);
+    if (track.category == TrackCategory.drums) {
+      unawaited(triggerPad(track, DrumPadMap.padIndexForPitch(midiNote)));
+    } else {
+      unawaited(triggerNote(track, midiNote, velocity: vel));
+    }
   }
 
   // --- Mic ---
@@ -1045,6 +1276,8 @@ class StudioController extends ChangeNotifier {
       await AudioEngine.instance.configureForRecording();
       final path = await _mic.start();
       isRecordingMic = path != null;
+      _recordTrackId = armed.id;
+      _recordStartStep = playheadStep;
       notifyListeners();
     } catch (e, st) {
       ErrorLog.instance.record(e, st);
@@ -1058,25 +1291,56 @@ class StudioController extends ChangeNotifier {
     try {
       final path = await _mic.stop();
       final p = project;
-      if (p != null && path != null) {
+      final startStep = _recordStartStep ?? 0;
+      final trackId = _recordTrackId;
+      _recordStartStep = null;
+      _recordTrackId = null;
+      if (p != null && path != null && trackId != null) {
         for (final t in p.tracks) {
-          if (t.category == TrackCategory.mic && t.recordArmed) {
-            t.recordedFilePath = path;
-            t.sampleRoot = path;
-            t.recordArmed = false;
-            // Place a clip note at record start (approx playhead at arm time = 0 for MVP).
-            if (t.notes.isEmpty) {
-              t.notes.add(
-                NoteEvent(
-                  id: _uuid.v4(),
-                  pitch: 60,
-                  startStep: 0,
-                  lengthSteps: p.loopEndStep.clamp(1, p.totalSteps),
-                  velocity: 100,
-                ),
+          if (t.id != trackId) continue;
+          final latencyMs =
+              t.latencyMs != 0 ? t.latencyMs : p.latencyCompensationMs;
+          final latSteps =
+              (latencyMs / 1000.0 / p.secondsPerStep).round();
+          final placed = (startStep - latSteps).clamp(0, p.loopEndStep);
+          var outPath = path;
+          if (t.overdub &&
+              t.recordedFilePath != null &&
+              File(t.recordedFilePath!).existsSync()) {
+            outPath = await _mixOverdubTakes(
+              existingPath: t.recordedFilePath!,
+              takePath: path,
+              offsetSteps: placed,
+              secondsPerStep: p.secondsPerStep,
+            );
+          }
+          t.recordedFilePath = outPath;
+          t.sampleRoot = outPath;
+          t.recordArmed = false;
+          await AudioEngine.instance.loadFile(outPath);
+          var lengthSteps = p.loopEndStep.clamp(1, p.totalSteps);
+          try {
+            final pcm = decodeWavStereo(await File(outPath).readAsBytes());
+            if (pcm != null) {
+              lengthSteps = math.max(
+                1,
+                (pcm.frames / ExportService.sampleRate / p.secondsPerStep)
+                    .round(),
               );
             }
-          }
+          } catch (_) {}
+          t.notes.removeWhere(
+            (n) => n.startStep == placed && n.pitch == 60,
+          );
+          t.notes.add(
+            NoteEvent(
+              id: _uuid.v4(),
+              pitch: 60,
+              startStep: placed,
+              lengthSteps: lengthSteps,
+              velocity: 100,
+            ),
+          );
         }
         _flushNotesToActivePattern();
       }
@@ -1127,6 +1391,7 @@ class StudioController extends ChangeNotifier {
       _onTransportPoll();
     });
     _onTransportPoll();
+    _syncNowPlaying();
     notifyListeners();
   }
 
@@ -1137,6 +1402,7 @@ class StudioController extends ChangeNotifier {
     AudioEngine.instance.pauseTransportClock();
     unawaited(_stopMicIfRecording());
     WakelockPlus.disable();
+    _syncNowPlaying();
     notifyListeners();
   }
 
@@ -1159,6 +1425,7 @@ class StudioController extends ChangeNotifier {
     unawaited(AudioEngine.instance.stopAll());
     unawaited(AudioEngine.instance.deactivateSession());
     unawaited(WakelockPlus.disable());
+    _syncNowPlaying();
     notifyListeners();
   }
 
@@ -1168,6 +1435,8 @@ class StudioController extends ChangeNotifier {
     switch (transportActionForLifecycle(state)) {
       case TransportLifecycleAction.none:
         break;
+      case TransportLifecycleAction.saveOnly:
+        unawaited(saveNow());
       case TransportLifecycleAction.pauseAndSave:
         if (isPlaying) pause();
         unawaited(saveNow());
@@ -1440,12 +1709,15 @@ class StudioController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<String?> exportAndShare({Rect? shareOrigin}) async {
+  Future<String?> exportAndShare({
+    Rect? shareOrigin,
+    MixExportFormat format = MixExportFormat.wav16,
+  }) async {
     final p = project;
     if (p == null) return 'No project open';
     try {
       pause();
-      final file = await _exporter.exportWav(p);
+      final file = await _exporter.exportMix(p, format: format);
       await _exporter.shareFile(file, shareOrigin: shareOrigin);
       return null;
     } catch (e, st) {
@@ -1493,6 +1765,36 @@ class StudioController extends ChangeNotifier {
     }
   }
 
+  Future<String?> shareAllProjectsBackup({Rect? shareOrigin}) async {
+    try {
+      await refreshRecent();
+      await backup.shareAll(recent, shareOrigin: shareOrigin);
+      return null;
+    } catch (e, st) {
+      ErrorLog.instance.record(e, st);
+      return e.toString();
+    }
+  }
+
+  Future<String> _mixOverdubTakes({
+    required String existingPath,
+    required String takePath,
+    required int offsetSteps,
+    required double secondsPerStep,
+  }) async {
+    final existingBytes = await File(existingPath).readAsBytes();
+    final takeBytes = await File(takePath).readAsBytes();
+    final existing = decodeWavStereo(existingBytes);
+    final take = decodeWavStereo(takeBytes);
+    if (existing == null || take == null) return takePath;
+    final offset = (offsetSteps * secondsPerStep * ExportService.sampleRate)
+        .round();
+    final mixed = overlayStereo(existing, take, offsetFrames: offset);
+    final bytes = encodeFloatStereoWav16(mixed, ExportService.sampleRate);
+    await File(existingPath).writeAsBytes(bytes, flush: true);
+    return existingPath;
+  }
+
   @override
   void dispose() {
     _poller?.cancel();
@@ -1500,6 +1802,7 @@ class StudioController extends ChangeNotifier {
     AudioEngine.instance.onInterruption = null;
     AudioEngine.instance.onBecomingNoisy = null;
     unawaited(_mic.dispose());
+    unawaited(midi.dispose());
     WakelockPlus.disable();
     super.dispose();
   }

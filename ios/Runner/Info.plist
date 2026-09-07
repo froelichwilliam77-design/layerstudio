@@ -43,6 +43,10 @@
 	</array>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>LayerStudio records into a mic track so you can layer vocals or acoustic ideas in your project. Audio stays on your device.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>LayerStudio can receive MIDI notes and clock from Bluetooth MIDI devices.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>LayerStudio can receive MIDI notes and clock from Bluetooth MIDI devices.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

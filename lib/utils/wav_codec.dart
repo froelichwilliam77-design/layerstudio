@@ -264,3 +264,49 @@ Uint8List encodeWavPcm24Stereo(Int32List interleaved, int sampleRate) {
     dataSize: dataSize,
   );
 }
+
+/// Overlay [take] onto [base] starting at [offsetFrames].
+/// When [replace] is false, samples are summed (overdub). When true, the take
+/// replaces the base for its duration (punch-in).
+StereoPcm overlayStereo(
+  StereoPcm base,
+  StereoPcm take, {
+  int offsetFrames = 0,
+  bool replace = false,
+}) {
+  final start = offsetFrames < 0 ? 0 : offsetFrames;
+  final n = math.max(base.frames, start + take.frames);
+  final left = Float64List(n);
+  final right = Float64List(n);
+  for (var i = 0; i < base.frames; i++) {
+    left[i] = base.left[i];
+    right[i] = base.right[i];
+  }
+  for (var i = 0; i < take.frames; i++) {
+    final dest = start + i;
+    if (dest >= n) break;
+    if (replace) {
+      left[dest] = take.left[i];
+      right[dest] = take.right[i];
+    } else {
+      left[dest] += take.left[i];
+      right[dest] += take.right[i];
+    }
+  }
+  return StereoPcm(left, right);
+}
+
+/// Encode float stereo to 16-bit WAV bytes (TPDF dither).
+Uint8List encodeFloatStereoWav16(
+  StereoPcm pcm,
+  int sampleRate, {
+  math.Random? random,
+}) {
+  final pcm16 = quantizePcm16Stereo(
+    pcm.left,
+    pcm.right,
+    dither: true,
+    random: random ?? math.Random(),
+  );
+  return encodeWavPcm16Stereo(pcm16, sampleRate);
+}

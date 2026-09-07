@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/pattern.dart';
 import '../models/track.dart';
 import '../services/studio_controller.dart';
 import '../theme/studio_theme.dart';
@@ -120,6 +121,10 @@ class _SongArrange extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = c.project!;
+    final endBar = (p.arrangementEndBar < 8 ? 8 : p.arrangementEndBar + 2)
+        .clamp(8, 64);
+    const barW = 36.0;
+
     return Card(
       color: StudioColors.surface,
       child: Padding(
@@ -145,61 +150,167 @@ class _SongArrange extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             if (p.arrangement.isEmpty)
               const Text(
-                'Add pattern clips to build a song (A → B → A…). Enable Song mode to play them in order.',
+                'Add pattern clips, then drag to move, tap to pick a pattern, or use +/− to resize. Enable Song mode to play them in order.',
                 style: TextStyle(fontSize: 12, color: StudioColors.textDim),
               )
             else
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  for (final clip in p.arrangement)
-                    InputChip(
-                      label: Text(
-                        '${c.patternById(clip.patternId)?.name ?? '?'} @ bar ${clip.startBar + 1} (${clip.lengthBars}b)',
-                      ),
-                      onDeleted: () => c.removeArrangementClip(clip.id),
-                      onPressed: () async {
-                        final bars = await showDialog<int>(
-                          context: context,
-                          builder: (ctx) {
-                            final ctl = TextEditingController(
-                                text: '${clip.lengthBars}');
-                            return AlertDialog(
-                              title: const Text('Clip length (bars)'),
-                              content: TextField(
-                                controller: ctl,
-                                keyboardType: TextInputType.number,
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(
+                  width: endBar * barW + 8,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          for (var b = 0; b < endBar; b++)
+                            SizedBox(
+                              width: barW,
+                              child: Text(
+                                '${b + 1}',
+                                style: const TextStyle(
+                                  fontSize: 9,
+                                  color: StudioColors.textDim,
+                                ),
                               ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(ctx),
-                                  child: const Text('Cancel'),
-                                ),
-                                FilledButton(
-                                  onPressed: () => Navigator.pop(
-                                      ctx, int.tryParse(ctl.text)),
-                                  child: const Text('OK'),
-                                ),
-                              ],
-                            );
-                          },
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      ...p.arrangement.map((clip) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: _ClipBlock(
+                            c: c,
+                            clip: clip,
+                            barW: barW,
+                          ),
                         );
-                        if (bars != null) {
-                          clip.lengthBars = bars.clamp(1, 32);
-                          c.updateTrack(c.selectedTrack ?? c.project!.tracks.first);
-                        }
-                      },
-                    ),
-                ],
+                      }),
+                    ],
+                  ),
+                ),
               ),
           ],
         ),
       ),
     );
+  }
+}
+
+class _ClipBlock extends StatelessWidget {
+  const _ClipBlock({
+    required this.c,
+    required this.clip,
+    required this.barW,
+  });
+
+  final StudioController c;
+  final ArrangementClip clip;
+  final double barW;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = c.patternById(clip.patternId)?.name ?? '?';
+    return GestureDetector(
+      onHorizontalDragStart: (_) => c.beginGestureUndo(),
+      onHorizontalDragUpdate: (d) {
+        final deltaBars = (d.delta.dx / barW).round();
+        if (deltaBars == 0) return;
+        c.moveArrangementClip(clip.id, clip.startBar + deltaBars);
+      },
+      onHorizontalDragEnd: (_) => c.endGestureUndo('Move clip'),
+      child: Row(
+        children: [
+          SizedBox(width: clip.startBar * barW),
+          Container(
+            width: (clip.lengthBars * barW).clamp(barW, 800),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+            decoration: BoxDecoration(
+              color: StudioColors.accent.withValues(alpha: 0.22),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: StudioColors.accent),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$name · ${clip.lengthBars} bar${clip.lengthBars == 1 ? '' : 's'}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Row(
+                  children: [
+                    InkWell(
+                      onTap: () => _pickPattern(context),
+                      child: const Padding(
+                        padding: EdgeInsets.only(right: 6, top: 2),
+                        child: Text('Pattern',
+                            style: TextStyle(
+                                fontSize: 10, color: StudioColors.accent2)),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () => c.resizeArrangementClip(
+                        clip.id,
+                        clip.lengthBars - 1,
+                      ),
+                      child: const Text('−', style: TextStyle(fontSize: 16)),
+                    ),
+                    const SizedBox(width: 6),
+                    InkWell(
+                      onTap: () => c.resizeArrangementClip(
+                        clip.id,
+                        clip.lengthBars + 1,
+                      ),
+                      child: const Text('+', style: TextStyle(fontSize: 16)),
+                    ),
+                    const Spacer(),
+                    InkWell(
+                      onTap: () => c.duplicateArrangementClip(clip.id),
+                      child: const Icon(Icons.copy, size: 14),
+                    ),
+                    const SizedBox(width: 6),
+                    InkWell(
+                      onTap: () => c.removeArrangementClip(clip.id),
+                      child: const Icon(Icons.close, size: 14),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickPattern(BuildContext context) async {
+    final p = c.project!;
+    final chosen = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: StudioColors.surface,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(title: Text('Clip pattern')),
+            for (final pat in p.patterns)
+              ListTile(
+                title: Text(pat.name),
+                selected: pat.id == clip.patternId,
+                onTap: () => Navigator.pop(ctx, pat.id),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (chosen != null) c.setArrangementClipPattern(clip.id, chosen);
   }
 }
 

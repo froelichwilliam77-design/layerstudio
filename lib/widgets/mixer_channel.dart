@@ -9,10 +9,22 @@ class MixerChannel extends StatelessWidget {
     super.key,
     required this.track,
     required this.onChanged,
+    this.onChangeStart,
+    this.onChangeEnd,
+    this.onToggleMute,
+    this.onToggleSolo,
+    this.onToggleCue,
+    this.onToggleOverdub,
   });
 
   final Track track;
   final VoidCallback onChanged;
+  final VoidCallback? onChangeStart;
+  final VoidCallback? onChangeEnd;
+  final VoidCallback? onToggleMute;
+  final VoidCallback? onToggleSolo;
+  final VoidCallback? onToggleCue;
+  final VoidCallback? onToggleOverdub;
 
   @override
   Widget build(BuildContext context) {
@@ -46,20 +58,33 @@ class MixerChannel extends StatelessWidget {
                 label: 'M',
                 active: track.muted,
                 color: StudioColors.warning,
-                onTap: () {
-                  track.muted = !track.muted;
-                  onChanged();
-                },
+                onTap: onToggleMute ??
+                    () {
+                      track.muted = !track.muted;
+                      onChanged();
+                    },
               ),
               const SizedBox(width: 4),
               _Tiny(
                 label: 'S',
                 active: track.solo,
                 color: StudioColors.accent,
-                onTap: () {
-                  track.solo = !track.solo;
-                  onChanged();
-                },
+                onTap: onToggleSolo ??
+                    () {
+                      track.solo = !track.solo;
+                      onChanged();
+                    },
+              ),
+              const SizedBox(width: 4),
+              _Tiny(
+                label: 'C',
+                active: track.cue,
+                color: StudioColors.accent2,
+                onTap: onToggleCue ??
+                    () {
+                      track.cue = !track.cue;
+                      onChanged();
+                    },
               ),
             ],
           ),
@@ -68,10 +93,12 @@ class MixerChannel extends StatelessWidget {
               quarterTurns: -1,
               child: Slider(
                 value: track.volume,
+                onChangeStart: (_) => onChangeStart?.call(),
                 onChanged: (v) {
                   track.volume = v;
                   onChanged();
                 },
+                onChangeEnd: (_) => onChangeEnd?.call(),
               ),
             ),
           ),
@@ -82,10 +109,12 @@ class MixerChannel extends StatelessWidget {
             value: track.pan,
             min: -1,
             max: 1,
+            onChangeStart: (_) => onChangeStart?.call(),
             onChanged: (v) {
               track.pan = v;
               onChanged();
             },
+            onChangeEnd: (_) => onChangeEnd?.call(),
           ),
           const Divider(height: 12),
           const Text('FX', style: TextStyle(fontSize: 10, color: StudioColors.textDim)),
@@ -125,6 +154,34 @@ class MixerChannel extends StatelessWidget {
               onChanged();
             },
           ),
+          if (track.category == TrackCategory.mic) ...[
+            const Divider(height: 8),
+            _Tiny(
+              label: 'OD',
+              active: track.overdub,
+              color: StudioColors.record,
+              onTap: onToggleOverdub ??
+                  () {
+                    track.overdub = !track.overdub;
+                    onChanged();
+                  },
+            ),
+            const Text('Latency',
+                style: TextStyle(fontSize: 9, color: StudioColors.textDim)),
+            Slider(
+              value: track.latencyMs.toDouble().clamp(0, 250),
+              min: 0,
+              max: 250,
+              divisions: 25,
+              onChangeStart: (_) => onChangeStart?.call(),
+              onChanged: (v) {
+                track.latencyMs = v.round();
+                onChanged();
+              },
+              onChangeEnd: (_) => onChangeEnd?.call(),
+            ),
+            Text('${track.latencyMs} ms', style: const TextStyle(fontSize: 9)),
+          ],
         ],
       ),
     );
@@ -140,7 +197,9 @@ class MixerChannel extends StatelessWidget {
         Expanded(
           child: Slider(
             value: value,
+            onChangeStart: (_) => onChangeStart?.call(),
             onChanged: onChanged,
+            onChangeEnd: (_) => onChangeEnd?.call(),
           ),
         ),
       ],

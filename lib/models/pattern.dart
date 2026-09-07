@@ -78,6 +78,19 @@ class ArrangementClip {
 
   int get endBar => startBar + lengthBars;
 
+  ArrangementClip copyWith({
+    String? patternId,
+    int? startBar,
+    int? lengthBars,
+  }) {
+    return ArrangementClip(
+      id: id,
+      patternId: patternId ?? this.patternId,
+      startBar: startBar ?? this.startBar,
+      lengthBars: lengthBars ?? this.lengthBars,
+    );
+  }
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'patternId': patternId,

@@ -46,6 +46,16 @@ class StudioScreen extends StatelessWidget {
           title: Text(p.name),
           actions: [
             IconButton(
+              tooltip: 'MIDI in',
+              onPressed: () => _openMidiSheet(context, c),
+              icon: Icon(
+                Icons.piano,
+                color: c.midi.connected
+                    ? StudioColors.accent2
+                    : StudioColors.textDim,
+              ),
+            ),
+            IconButton(
               tooltip: 'Export project (.layerstudio)',
               onPressed: () async {
                 final err = await c.exportProjectBundle(
@@ -402,3 +412,60 @@ class _EditorToolbar extends StatelessWidget {
     return null;
   }
 }
+
+Future<void> _openMidiSheet(BuildContext context, StudioController c) async {
+  final devices = await c.midi.devices();
+  if (!context.mounted) return;
+  await showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: StudioColors.surface,
+    builder: (ctx) {
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'MIDI input',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                c.midi.connected
+                    ? 'Connected: ${c.midi.deviceName}'
+                    : 'Notes play the selected track. Clock (24 ppqn) can set BPM.',
+                style: const TextStyle(color: StudioColors.textDim, fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              if (devices.isEmpty)
+                const Text('No MIDI devices found.')
+              else
+                for (final d in devices)
+                  ListTile(
+                    title: Text(d.name),
+                    subtitle: Text(d.connected ? 'Connected' : d.type.name),
+                    onTap: () async {
+                      await c.midi.connect(d);
+                      c.notifyFxChanged();
+                      if (ctx.mounted) Navigator.pop(ctx);
+                    },
+                  ),
+              if (c.midi.connected)
+                TextButton(
+                  onPressed: () async {
+                    await c.midi.disconnect();
+                    c.notifyFxChanged();
+                    if (ctx.mounted) Navigator.pop(ctx);
+                  },
+                  child: const Text('Disconnect'),
+                ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+

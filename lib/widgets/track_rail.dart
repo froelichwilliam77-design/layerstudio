@@ -207,20 +207,14 @@ class _TrackRailState extends State<TrackRail> {
                           label: 'Mute',
                           active: selected.muted,
                           color: StudioColors.danger,
-                          onTap: () {
-                            selected.muted = !selected.muted;
-                            controller.updateTrack(selected);
-                          },
+                          onTap: () => controller.toggleMute(selected),
                         ),
                         const SizedBox(width: 8),
                         _MiniToggle(
                           label: 'Solo',
                           active: selected.solo,
                           color: StudioColors.warning,
-                          onTap: () {
-                            selected.solo = !selected.solo;
-                            controller.updateTrack(selected);
-                          },
+                          onTap: () => controller.toggleSolo(selected),
                         ),
                         const Spacer(),
                         Text(

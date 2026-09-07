@@ -101,7 +101,7 @@ class SoundPreset {
 
 /// Built-in library (synthetic samples — see assets/samples/LICENSE).
 class SoundLibrary {
-  static const List<SoundPreset> all = [
+  static const List<SoundPreset> bundled = [
     // —— Drums (hip-hop / trap / electronic first) ——
     SoundPreset(
       id: 'drums_trap',
@@ -412,6 +412,11 @@ class SoundLibrary {
       ],
     ),
   ];
+
+  /// User-imported WAVs (not const — filled at bootstrap).
+  static final List<SoundPreset> userPresets = [];
+
+  static List<SoundPreset> get all => [...bundled, ...userPresets];
 
   static SoundPreset? byId(String id) {
     try {

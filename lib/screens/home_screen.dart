@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../services/studio_controller.dart';
 import '../theme/studio_theme.dart';
 import '../utils/music_theory.dart';
+import '../utils/share_sheet.dart';
 import '../widgets/empty_state.dart';
 import 'studio_screen.dart';
 
@@ -42,6 +43,20 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Backup all projects',
+            onPressed: () async {
+              final err = await c.shareAllProjectsBackup(
+                shareOrigin: shareSheetOrigin(context),
+              );
+              if (context.mounted && err != null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Backup failed: $err')),
+                );
+              }
+            },
+            icon: const Icon(Icons.backup_outlined),
+          ),
           IconButton(
             tooltip: 'Import project',
             onPressed: () => _importProject(context),

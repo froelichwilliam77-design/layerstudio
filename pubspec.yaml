@@ -1,7 +1,7 @@
 name: layerstudio
 description: Beat-maker-first phone music studio (mobile DAW) — LayerStudio.
 publish_to: 'none'
-version: 1.1.11+14
+version: 1.2.0+15
 
 environment:
   sdk: ^3.9.0
@@ -24,6 +24,9 @@ dependencies:
   path: ^1.9.1
   shared_preferences: ^2.5.3
   record: ^6.0.0
+  audio_service: ^0.18.19
+  flutter_midi_command: ^1.0.2
+  flutter_lame_update: ^1.1.0
 
 dev_dependencies:
   flutter_test:

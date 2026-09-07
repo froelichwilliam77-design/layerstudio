@@ -9,8 +9,8 @@
 - **Full description (draft):**
   LayerStudio is a beginner-friendly mobile music studio with a beat-maker-first focus.
   Program drum grooves with swing and step probability, stack bass/keys/guitar layers,
-  arrange A/B/C/D patterns into a simple song timeline, mix with per-track FX, and export
-  WAV or a portable `.layerstudio` project. Works offline. No account required.
+  arrange A/B/C/D patterns into a song timeline, mix with per-track FX, and export
+  WAV, MP3, or a portable `.layerstudio` project. Works offline. No account required.
 
 ## Assets still needed
 - [ ] Feature graphic (1024×500)

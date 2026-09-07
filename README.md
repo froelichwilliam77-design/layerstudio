@@ -4,22 +4,37 @@
 
 [![CI](https://github.com/froelichwilliam77-design/layerstudio/actions/workflows/ci.yml/badge.svg)](https://github.com/froelichwilliam77-design/layerstudio/actions/workflows/ci.yml)
 
-> Program a beat with swing and step probability · layer instruments · mix with per-track FX · export **stereo dithered WAV** or a portable `.layerstudio` project. Offline. No account.
+> Program a beat with swing and step probability · layer instruments · mix with per-track FX · export **stereo dithered WAV or MP3** or a portable `.layerstudio` project. Offline. No account.
 
 ### Why it exists
 Most phone “studios” chase BandLab-scale features. LayerStudio stays focused: **excellent beat-making** inside a small DAW shell. Piano/guitar are available; we are **not** building AI drummer, live-loops marketplace, cloud sync, or Autotune.
 
-### Snapshot (1.1.11)
+### Snapshot (1.2.0)
 | | |
 |---|---|
 | Drums | 12 procedural kits (trap → punk), pads + 16-step, swing, probability |
-| Layers | Bass / keys / guitar with multi-root samples + live Freeverb |
-| Structure | Pattern bank A–D, song arrange, undo/redo |
-| Share | Stereo 16-bit WAV (TPDF dither) · `.layerstudio` project zip |
+| Layers | Bass / keys / guitar + **user WAV import** |
+| Structure | Pattern bank A–D, song timeline (move / resize / duplicate), undo/redo including mixer |
+| Share | Stereo 16-bit/24-bit WAV · **MP3 (LAME)** · `.layerstudio` zip · all-projects backup |
+| Play | Lock-screen / notification transport · MIDI in + clock BPM · mic punch-in / overdub |
 | Platforms | Android (signed APK via CI when secrets set) · iOS (CocoaPods + unsigned CI artifact) |
 
 **Try it:** clone → `flutter pub get` → `flutter run` (see [Run](#run)). Screenshots / demo GIF welcome in PRs — drop them under `docs/` and link here.
 
+
+## What’s new in 1.2.0
+
+- **User WAV import** into the sound library (copied into app documents, tagged YOURS)
+- **MP3 export** via bundled LAME (`flutter_lame_update` / dart_lame — **LGPL**) plus 16/24-bit WAV
+- **Closer live/offline mixdown** — cubic pitch resample + Echo / wave-shaper / Freeverb-style chain; song mode bounces the arrangement
+- **Undo** for mixer, FX, arrange clips, and project settings (plus existing note undo)
+- **Arrange timeline** — drag clips, resize, duplicate, pick pattern A–D
+- **Mic punch-in** from the playhead, optional **overdub mix**, per-track latency (ms)
+- **Cue / PFL** in the mixer (C button + CUE mix)
+- **Lock-screen / notification transport** (`audio_service`); background no longer pauses the beat
+- **MIDI input** (notes + clock → BPM)
+- **Onboarding** on first launch; **backup all projects** zip from Home
+- Local error log file in app documents (still no crash cloud)
 
 ## What’s new in 1.1.11
 
@@ -68,13 +83,16 @@ Most phone “studios” chase BandLab-scale features. LayerStudio stays focused
 | Beat-maker: pads + 16-step + swing + probability | Working |
 | Pattern bank A–D + song arrange clips | Working |
 | Count-in + metronome (audio clock) | Working |
-| Undo/redo (notes / clear) | Working |
+| Undo/redo (notes, mixer, arrange, meta) | Working |
 | Piano roll / keyboard / guitar chords | Working (supporting, not expanded) |
-| Mixer + live per-track FX | Working (see Known limits) |
-| Mic arm → record take → playback | Working (not sample-accurate punch-in) |
-| Local save + `.layerstudio` import/export | Working |
-| Export WAV share | Working (stereo 16-bit TPDF dithered) |
-| Export MP3 | Stubbed |
+| Mixer + live per-track FX + cue PFL | Working (see Known limits) |
+| Mic punch-in / overdub + latency offset | Working (not sample-accurate) |
+| User WAV sample import | Working |
+| Local save + `.layerstudio` import/export + zip backup | Working |
+| Export WAV / MP3 share | Working (stereo 16-bit TPDF dithered WAV, 24-bit WAV, MP3 192k) |
+| Lock-screen / notification transport | Working |
+| MIDI in + clock tempo | Working (device support varies) |
+| First-launch onboarding | Working |
 | CI analyze + test | Working |
 | Android release-signed APKs | Working (when secrets set) |
 | iOS unsigned CI artifact | Working (`Podfile` + `flutter build ios --no-codesign`; no TestFlight without Apple certs) |
@@ -98,13 +116,11 @@ Most phone “studios” chase BandLab-scale features. LayerStudio stays focused
 ## Known limits
 
 - **Clocked scheduling:** Onsets are Timer-delayed to the swung musical time on the app transport clock. Native SoLoud `playClocked` / `playScheduled` are not exposed in flutter_soloud 3.5.4 (requires package ≥4.1 / Flutter ≥3.41). Sub-buffer sample accuracy is therefore not available yet; pause/stop/seek cancel pending timers.
-- **Pitch:** SoLoud uses playback-rate pitching. Melodic presets pick the **nearest multi-root** sample then rate-pitch residual semis (less stretch than a single root). Notes are hard-clamped to ±24 semitones past the outer roots; UI warns beyond ±12 from the nearest root.
-- **Reverb:** Freeverb needs stereo sources — drums and melodic samples are stereo so Freeverb can activate. Not a convolution hall.
-- **Mic record:** Armed-track capture from playhead, not sample-accurate punch-in / overdub.
-- **Song arrange:** Simple clip list (pattern + start bar + length), not a full DAW playlist editor.
-- **WAV export:** Offline mixdown is **stereo 16-bit @ 44.1 kHz with TPDF dither** (optional 24-bit). Stereo samples stay stereo; track pan is applied. Offline FX are still a simplified EQ/drive/cab/comp + crude delay/reverb taps — not full live Echo/WaveShaper/Freeverb parity.
-- **MP3 export:** Still stubbed / not in-app.
-- **Store submission:** Not done — see `STORE.md`. TestFlight needs Apple certs (iOS workflow uploads **unsigned** artifacts only).
+- **Pitch:** SoLoud uses playback-rate pitching live. Mixdown cubic-interpolates at that rate (smoother than linear). Melodic presets pick the **nearest multi-root** sample then rate-pitch residual semis. Notes are hard-clamped to ±24 semitones past the outer roots; UI warns beyond ±12 from the nearest root.
+- **Reverb:** Freeverb needs stereo sources — drums and melodic samples are stereo so Freeverb can activate. Offline mix approximates Echo / wave-shaper / comb reverb; not bit-identical to SoLoud.
+- **Mic record:** Punch-in from the playhead with optional overdub mix and millisecond latency offset — not sample-accurate hardware monitoring.
+- **MIDI / Link:** Note in + MIDI clock BPM only. No MIDI out, no Ableton Link.
+- **Store submission:** Not done — see `STORE.md`. TestFlight needs Apple certs (iOS workflow uploads **unsigned** artifacts only). No cloud account/backup.
 
 ## Privacy
 
@@ -157,4 +173,5 @@ PRIVACY.md  STORE.md
 
 ## License
 
-MIT for app code. Samples under `assets/samples/` are CC0 (see `assets/samples/LICENSE`).
+MIT for app code. Samples under `assets/samples/` are CC0 (see `assets/samples/LICENSE`).  
+MP3 encoding uses **LAME**, bundled by [`flutter_lame_update`](https://pub.dev/packages/flutter_lame_update) / `dart_lame` under the **LGPL**. The LAME source is the copy shipped with that plugin.

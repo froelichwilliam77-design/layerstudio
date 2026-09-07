@@ -10,14 +10,14 @@ void main() {
     );
   });
 
-  test('paused / hidden lifecycle pauses and saves', () {
+  test('paused / hidden lifecycle saves but keeps playing for lock screen', () {
     expect(
       transportActionForLifecycle(AppLifecycleState.paused),
-      TransportLifecycleAction.pauseAndSave,
+      TransportLifecycleAction.saveOnly,
     );
     expect(
       transportActionForLifecycle(AppLifecycleState.hidden),
-      TransportLifecycleAction.pauseAndSave,
+      TransportLifecycleAction.saveOnly,
     );
   });
 
