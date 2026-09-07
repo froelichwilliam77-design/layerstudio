@@ -10,11 +10,13 @@ import 'package:uuid/uuid.dart';
 
 import '../data/sound_library.dart';
 import '../models/project.dart';
+import '../utils/share_sheet.dart';
 import 'project_store.dart';
 
 /// Portable `.layerstudio` zip: project.json + samples/ for referenced WAVs.
 class ProjectBundleService {
-  ProjectBundleService({ProjectStore? store}) : _store = store ?? ProjectStore();
+  ProjectBundleService({ProjectStore? store})
+    : _store = store ?? ProjectStore();
 
   final ProjectStore _store;
   final _uuid = const Uuid();
@@ -77,7 +79,7 @@ class ProjectBundleService {
     return file;
   }
 
-  Future<void> shareProject(StudioProject project) async {
+  Future<void> shareProject(StudioProject project, {Rect? shareOrigin}) async {
     final file = await exportToTempFile(project);
     await SharePlus.instance.share(
       ShareParams(
@@ -89,6 +91,7 @@ class ProjectBundleService {
           ),
         ],
         text: 'LayerStudio project: ${project.name}',
+        sharePositionOrigin: shareOrigin ?? shareSheetOriginFallback,
       ),
     );
   }
@@ -105,8 +108,8 @@ class ProjectBundleService {
     if (manifestFile == null) {
       throw StateError('Invalid project bundle: missing $manifestName');
     }
-    final json = jsonDecode(utf8.decode(manifestFile.content))
-        as Map<String, dynamic>;
+    final json =
+        jsonDecode(utf8.decode(manifestFile.content)) as Map<String, dynamic>;
 
     final embedded =
         (json['embeddedSamples'] as Map?)?.cast<String, String>() ?? {};

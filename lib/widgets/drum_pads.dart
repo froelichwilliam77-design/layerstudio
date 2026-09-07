@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../data/sound_library.dart';
@@ -37,13 +38,15 @@ class DrumPads extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           child: InkWell(
             borderRadius: BorderRadius.circular(16),
-            onTap: () {
+            onTapDown: (_) {
+              HapticFeedback.mediumImpact();
               c.triggerPad(track, i);
               if (!c.eraseMode) {
                 c.setStepCell(
                   trackId: track.id,
                   padIndex: i,
-                  step: c.playheadStep %
+                  step:
+                      c.playheadStep %
                       (c.project?.loopEndStep ?? 16).clamp(1, 9999),
                   on: true,
                 );

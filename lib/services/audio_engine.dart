@@ -98,7 +98,8 @@ class AudioEngine {
           avAudioSessionCategory: AVAudioSessionCategory.playAndRecord,
           avAudioSessionCategoryOptions:
               AVAudioSessionCategoryOptions.defaultToSpeaker |
-                  AVAudioSessionCategoryOptions.allowBluetooth,
+              AVAudioSessionCategoryOptions.allowBluetooth |
+              AVAudioSessionCategoryOptions.allowBluetoothA2dp,
           avAudioSessionMode: AVAudioSessionMode.defaultMode,
           androidAudioAttributes: const AndroidAudioAttributes(
             contentType: AndroidAudioContentType.music,
@@ -267,8 +268,8 @@ class AudioEngine {
           0.18 + delay * 0.45;
       src.filters.echoFilter.decay(soundHandle: handle).value =
           0.25 + delay * 0.5;
-      src.filters.echoFilter.wet(soundHandle: handle).value =
-          (delay * 0.75).clamp(0.0, 0.85);
+      src.filters.echoFilter.wet(soundHandle: handle).value = (delay * 0.75)
+          .clamp(0.0, 0.85);
 
       // Mini Amp: Gain/Drive → SoLoud wave-shaper (audible saturation).
       final base = switch (fx.ampPreset) {
@@ -279,8 +280,8 @@ class AudioEngine {
         AmpPreset.bassDrive => 0.42,
       };
       final amount = (base + gain * 0.85).clamp(0.0, 0.95);
-      src.filters.waveShaperFilter.amount(soundHandle: handle).value =
-          amount.clamp(-1.0, 1.0);
+      src.filters.waveShaperFilter.amount(soundHandle: handle).value = amount
+          .clamp(-1.0, 1.0);
       src.filters.waveShaperFilter.wet(soundHandle: handle).value =
           amount > 0.03 ? (0.45 + gain * 0.5).clamp(0.0, 0.95) : 0.0;
 
@@ -290,10 +291,11 @@ class AudioEngine {
         final toneHz = 500.0 + tone * 7500.0;
         final cabHz = cab ? toneHz * 0.55 : toneHz;
         src.filters.biquadFilter.type(soundHandle: handle).value = 0; // LOWPASS
-        src.filters.biquadFilter.frequency(soundHandle: handle).value =
-            cabHz.clamp(120.0, 12000.0);
-        src.filters.biquadFilter.resonance(soundHandle: handle).value =
-            cab ? 1.4 : 0.7;
+        src.filters.biquadFilter.frequency(soundHandle: handle).value = cabHz
+            .clamp(120.0, 12000.0);
+        src.filters.biquadFilter.resonance(soundHandle: handle).value = cab
+            ? 1.4
+            : 0.7;
         src.filters.biquadFilter.wet(soundHandle: handle).value =
             (tone < 0.92 || cab) ? 0.85 : 0.35;
       }
@@ -324,7 +326,6 @@ class AudioEngine {
       debugPrint('applyVoiceFx skipped: $e');
     }
   }
-
 
   /// Cancel all pending clocked oneshots (pause / stop / seek / re-anchor).
   void cancelScheduledPlays() {

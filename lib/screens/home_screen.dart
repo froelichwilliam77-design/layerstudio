@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../services/studio_controller.dart';
 import '../theme/studio_theme.dart';
 import '../utils/music_theory.dart';
+import '../utils/share_sheet.dart';
 import '../widgets/empty_state.dart';
 import 'studio_screen.dart';
 
@@ -42,6 +43,20 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Backup all projects',
+            onPressed: () async {
+              final err = await c.shareAllProjectsBackup(
+                shareOrigin: shareSheetOrigin(context),
+              );
+              if (context.mounted && err != null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Backup failed: $err')),
+                );
+              }
+            },
+            icon: const Icon(Icons.backup_outlined),
+          ),
           IconButton(
             tooltip: 'Import project',
             onPressed: () => _importProject(context),
@@ -100,16 +115,19 @@ class _HomeScreenState extends State<HomeScreen> {
                             color: StudioColors.danger.withValues(alpha: 0.25),
                             borderRadius: BorderRadius.circular(14),
                           ),
-                          child: const Icon(Icons.delete,
-                              color: StudioColors.danger),
+                          child: const Icon(
+                            Icons.delete,
+                            color: StudioColors.danger,
+                          ),
                         ),
                         confirmDismiss: (_) async {
                           return await showDialog<bool>(
                                 context: context,
                                 builder: (ctx) => AlertDialog(
                                   title: const Text('Delete project?'),
-                                  content:
-                                      Text('Delete "${p.name}" permanently?'),
+                                  content: Text(
+                                    'Delete "${p.name}" permanently?',
+                                  ),
                                   actions: [
                                     TextButton(
                                       onPressed: () =>
@@ -134,14 +152,16 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                             title: Text(
                               p.name,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w700),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                             subtitle: Text(
                               '${p.bpm} BPM · ${p.key} ${p.scale} · '
                               '${p.tracks.length} tracks · ${fmt.format(p.updatedAt.toLocal())}',
                               style: const TextStyle(
-                                  color: StudioColors.textDim),
+                                color: StudioColors.textDim,
+                              ),
                             ),
                             trailing: const Icon(Icons.chevron_right),
                             onTap: () async {
@@ -165,18 +185,25 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-
   Future<void> _importProject(BuildContext context) async {
     final c = context.read<StudioController>();
     try {
       final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: const ['layerstudio', 'zip'],
-        withData: false,
+        allowMultiple: false,
+        withData: true,
       );
       if (result == null || result.files.isEmpty) return;
-      final path = result.files.single.path;
-      if (path == null) {
+      final picked = result.files.single;
+      final bytes = picked.bytes;
+      final path = picked.path;
+      String? err;
+      if (bytes != null && bytes.isNotEmpty) {
+        err = await c.importProjectBytes(bytes);
+      } else if (path != null) {
+        err = await c.importProjectFile(File(path));
+      } else {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Could not read selected file')),
@@ -184,22 +211,21 @@ class _HomeScreenState extends State<HomeScreen> {
         }
         return;
       }
-      final err = await c.importProjectFile(File(path));
       if (!context.mounted) return;
       if (err != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Import failed: $err')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Import failed: $err')));
         return;
       }
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const StudioScreen()),
-      );
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => const StudioScreen()));
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Import failed: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Import failed: $e')));
       }
     }
   }
@@ -268,13 +294,14 @@ class _HomeScreenState extends State<HomeScreen> {
                               isExpanded: true,
                               value: key,
                               items: MusicTheory.pitchNames
-                                  .map((k) => DropdownMenuItem(
-                                        value: k,
-                                        child: Text(k),
-                                      ))
+                                  .map(
+                                    (k) => DropdownMenuItem(
+                                      value: k,
+                                      child: Text(k),
+                                    ),
+                                  )
                                   .toList(),
-                              onChanged: (v) =>
-                                  setModal(() => key = v ?? 'C'),
+                              onChanged: (v) => setModal(() => key = v ?? 'C'),
                             ),
                           ),
                         ),
@@ -292,9 +319,13 @@ class _HomeScreenState extends State<HomeScreen> {
                               value: scale,
                               items: const [
                                 DropdownMenuItem(
-                                    value: 'major', child: Text('Major')),
+                                  value: 'major',
+                                  child: Text('Major'),
+                                ),
                                 DropdownMenuItem(
-                                    value: 'minor', child: Text('Minor')),
+                                  value: 'minor',
+                                  child: Text('Minor'),
+                                ),
                               ],
                               onChanged: (v) =>
                                   setModal(() => scale = v ?? 'major'),
@@ -335,11 +366,14 @@ class _HomeScreenState extends State<HomeScreen> {
         scale: scale,
         bars: bars,
       );
+      nameCtrl.dispose();
       if (context.mounted) {
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const StudioScreen()),
-        );
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const StudioScreen()));
       }
+    } else {
+      nameCtrl.dispose();
     }
   }
 }

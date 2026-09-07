@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:layerstudio/data/sound_library.dart';
 import 'package:layerstudio/models/track.dart';
+import 'package:layerstudio/services/user_sample_store.dart';
 
 void main() {
   test('SoundLibrary exposes ~12 drum kits with 5 pads each', () {
@@ -17,6 +18,20 @@ void main() {
     // Legacy ids remain for saved projects
     expect(SoundLibrary.byId('drums_rock'), isNotNull);
     expect(SoundLibrary.byId('drums_elec'), isNotNull);
+  });
+
+  test('user drum import maps five pads to the same file', () {
+    final preset = UserSampleStore.presetFromFile(
+      id: 'user_1',
+      label: 'My Kick',
+      path: '/tmp/kick.wav',
+      category: TrackCategory.drums,
+      originalName: 'kick.wav',
+    );
+    expect(preset.drumKit, isNotNull);
+    expect(preset.drumKit!.length, 5);
+    expect(preset.drumKit!.values.every((p) => p == '/tmp/kick.wav'), isTrue);
+    expect(preset.drumKit!.keys.first.toLowerCase(), contains('kick'));
   });
 
   test('DrumPadMap pitch mapping is stable', () {

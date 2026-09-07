@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../services/error_log.dart';
+import '../services/export_service.dart';
 import '../services/studio_controller.dart';
 import '../theme/studio_theme.dart';
+import '../utils/share_sheet.dart';
 
 class TransportBar extends StatefulWidget {
   const TransportBar({super.key});
@@ -31,12 +33,12 @@ class _TransportBarState extends State<TransportBar> {
         color: StudioColors.surface,
         border: Border(top: BorderSide(color: StudioColors.border)),
       ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
               children: [
                 _Btn(icon: Icons.stop_rounded, onTap: c.stop),
                 _Btn(
@@ -66,8 +68,10 @@ class _TransportBarState extends State<TransportBar> {
                   onTap: () => _editBpm(context, c),
                   borderRadius: BorderRadius.circular(8),
                   child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 4,
+                    ),
                     child: Text(
                       '${p.bpm}',
                       style: const TextStyle(
@@ -77,7 +81,6 @@ class _TransportBarState extends State<TransportBar> {
                     ),
                   ),
                 ),
-                const Spacer(),
                 IconButton(
                   tooltip: 'Undo',
                   onPressed: c.commands.canUndo ? c.undo : null,
@@ -128,9 +131,41 @@ class _TransportBarState extends State<TransportBar> {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Export WAV',
+                  tooltip: 'Export mix',
                   onPressed: () async {
-                    final err = await c.exportAndShare();
+                    final format = await showModalBottomSheet<MixExportFormat>(
+                      context: context,
+                      backgroundColor: StudioColors.surface,
+                      builder: (ctx) => SafeArea(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const ListTile(title: Text('Export mix')),
+                            ListTile(
+                              title: const Text('WAV 16-bit (dithered)'),
+                              onTap: () =>
+                                  Navigator.pop(ctx, MixExportFormat.wav16),
+                            ),
+                            ListTile(
+                              title: const Text('WAV 24-bit'),
+                              onTap: () =>
+                                  Navigator.pop(ctx, MixExportFormat.wav24),
+                            ),
+                            ListTile(
+                              title: const Text('MP3 192 kbps'),
+                              subtitle: const Text('Bundled LAME encoder (LGPL)'),
+                              onTap: () =>
+                                  Navigator.pop(ctx, MixExportFormat.mp3),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                    if (format == null || !context.mounted) return;
+                    final err = await c.exportAndShare(
+                      shareOrigin: shareSheetOrigin(context),
+                      format: format,
+                    );
                     if (context.mounted && err != null) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('Export failed: $err')),
@@ -159,66 +194,68 @@ class _TransportBarState extends State<TransportBar> {
                 ),
               ],
             ),
-            if (_settingsOpen)
-              Row(
-                children: [
-                  const Text('Swing',
-                      style: TextStyle(
-                          fontSize: 11, color: StudioColors.textDim)),
-                  Expanded(
-                    child: Slider(
-                      min: 0,
-                      max: 100,
-                      divisions: 20,
-                      value: p.swingPercent.toDouble(),
-                      label: '${p.swingPercent}%',
-                      onChanged: (v) =>
-                          c.updateProjectMeta(swingPercent: v.round()),
-                    ),
+          ),
+          if (_settingsOpen)
+            Row(
+              children: [
+                const Text(
+                  'Swing',
+                  style: TextStyle(fontSize: 11, color: StudioColors.textDim),
+                ),
+                Expanded(
+                  child: Slider(
+                    min: 0,
+                    max: 100,
+                    divisions: 20,
+                    value: p.swingPercent.toDouble(),
+                    label: '${p.swingPercent}%',
+                    onChangeStart: (_) => c.beginGestureUndo(),
+                    onChanged: (v) =>
+                        c.updateProjectMeta(swingPercent: v.round(), recordUndo: false),
+                    onChangeEnd: (_) => c.endGestureUndo('Swing'),
                   ),
-                  PopupMenuButton<int>(
-                    tooltip: 'Count-in',
-                    initialValue: p.countInBars,
-                    onSelected: (v) => c.updateProjectMeta(countInBars: v),
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(value: 0, child: Text('Count-in off')),
-                      PopupMenuItem(value: 1, child: Text('1 bar count-in')),
-                      PopupMenuItem(value: 2, child: Text('2 bar count-in')),
-                    ],
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      child: Text(
-                        p.countInBars == 0
-                            ? 'Count'
-                            : 'Count×${p.countInBars}',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: p.countInBars > 0
-                              ? StudioColors.accent
-                              : StudioColors.textDim,
-                        ),
+                ),
+                PopupMenuButton<int>(
+                  tooltip: 'Count-in',
+                  initialValue: p.countInBars,
+                  onSelected: (v) => c.updateProjectMeta(countInBars: v),
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 0, child: Text('Count-in off')),
+                    PopupMenuItem(value: 1, child: Text('1 bar count-in')),
+                    PopupMenuItem(value: 2, child: Text('2 bar count-in')),
+                  ],
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: Text(
+                      p.countInBars == 0 ? 'Count' : 'Count×${p.countInBars}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: p.countInBars > 0
+                            ? StudioColors.accent
+                            : StudioColors.textDim,
                       ),
                     ),
                   ),
-                  FilterChip(
-                    label: Text(p.songMode ? 'Song' : 'Pattern',
-                        style: const TextStyle(fontSize: 11)),
-                    selected: p.songMode,
-                    showCheckmark: false,
-                    onSelected: (v) => c.updateProjectMeta(songMode: v),
-                    visualDensity: VisualDensity.compact,
+                ),
+                FilterChip(
+                  label: Text(
+                    p.songMode ? 'Song' : 'Pattern',
+                    style: const TextStyle(fontSize: 11),
                   ),
-                ],
-              ),
-          ],
-        ),
+                  selected: p.songMode,
+                  showCheckmark: false,
+                  onSelected: (v) => c.updateProjectMeta(songMode: v),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ],
+            ),
+        ],
       ),
     );
   }
 
   Future<void> _editBpm(BuildContext context, StudioController c) async {
-    final controller =
-        TextEditingController(text: '${c.project?.bpm ?? 120}');
+    final controller = TextEditingController(text: '${c.project?.bpm ?? 120}');
     final result = await showDialog<int>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -234,14 +271,14 @@ class _TransportBarState extends State<TransportBar> {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () =>
-                Navigator.pop(ctx, int.tryParse(controller.text)),
+            onPressed: () => Navigator.pop(ctx, int.tryParse(controller.text)),
             child: const Text('Set'),
           ),
         ],
       ),
     );
     if (result != null) c.updateProjectMeta(bpm: result);
+    controller.dispose();
   }
 }
 

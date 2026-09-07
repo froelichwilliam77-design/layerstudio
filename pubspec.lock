@@ -25,6 +25,30 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.13.1"
+  audio_service:
+    dependency: "direct main"
+    description:
+      name: audio_service
+      sha256: "95f3267f3449eb5cf71c8fcf1d556f57af1e898e2dc5815fb168d1843653edb7"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.18.19"
+  audio_service_platform_interface:
+    dependency: transitive
+    description:
+      name: audio_service_platform_interface
+      sha256: "6283782851f6c8b501b60904a32fc7199dc631172da0629d7301e66f672ab777"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.3"
+  audio_service_web:
+    dependency: transitive
+    description:
+      name: audio_service_web
+      sha256: b8ea9243201ee53383157fbccf13d5d2a866b5dda922ec19d866d1d5d70424df
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.4"
   audio_session:
     dependency: "direct main"
     description:
@@ -89,6 +113,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.9"
+  dart_lame:
+    dependency: transitive
+    description:
+      name: dart_lame
+      sha256: "5f0e00e54d0d5f0334940fd95f59fbb359f9febc4d3359886e18b48861b60b18"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.3"
   dbus:
     dependency: transitive
     description:
@@ -142,6 +174,22 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_cache_manager:
+    dependency: transitive
+    description:
+      name: flutter_cache_manager
+      sha256: "1de7849213b4c73c85aca7e0ac687a9a5d82ccdb594366b9dcc26cb6a2189cd2"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.4.2"
+  flutter_lame_update:
+    dependency: "direct main"
+    description:
+      name: flutter_lame_update
+      sha256: "90be607c3abc6196d28bb286051a9a49c4e1cc5475267b67e6c4bd380187011b"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.1.0"
   flutter_lints:
     dependency: "direct dev"
     description:
@@ -150,6 +198,62 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.0.0"
+  flutter_midi_command:
+    dependency: "direct main"
+    description:
+      name: flutter_midi_command
+      sha256: "3bca948b6a36aca3233ae4899a77cc31b344638fa36d589669c22fd0e46df57d"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.2"
+  flutter_midi_command_android:
+    dependency: transitive
+    description:
+      name: flutter_midi_command_android
+      sha256: "7a1cd334fdd42054e47f63605228215282ff04f918eee4532772a2677238b50c"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.3"
+  flutter_midi_command_darwin:
+    dependency: transitive
+    description:
+      name: flutter_midi_command_darwin
+      sha256: ad1c9417ff92b20ebe0b5b2f8a5aa40b134fc3110d0a527c61a8a1ec7315571b
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.2.0"
+  flutter_midi_command_linux:
+    dependency: transitive
+    description:
+      name: flutter_midi_command_linux
+      sha256: b1bb23b2fd04ff6b748b975ab26e1a5c27e86d37632211a44b48aa2cf0119212
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.2.0"
+  flutter_midi_command_platform_interface:
+    dependency: transitive
+    description:
+      name: flutter_midi_command_platform_interface
+      sha256: "1ec889b004ea40f9e429ae3a9d511f396e3f951e120a69c599bc08fe712b474f"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.2.0"
+  flutter_midi_command_web:
+    dependency: transitive
+    description:
+      name: flutter_midi_command_web
+      sha256: ed05dd77a330de43e8f085160a08781a4446ab22ed6a2fa5c217ae627d97f2fd
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.2.0"
+  flutter_midi_command_windows:
+    dependency: transitive
+    description:
+      name: flutter_midi_command_windows
+      sha256: "8ce07e6bfdda5071f4dfd14d01e9c4fe9ade0eaf9b5f10e46298023999ac7e80"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.1"
   flutter_plugin_android_lifecycle:
     dependency: transitive
     description:
@@ -200,6 +304,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.20.3"
+  js:
+    dependency: transitive
+    description:
+      name: js
+      sha256: "53385261521cc4a0c4658fd0ad07a7d14591cf8fc33abbceae306ddb974888dc"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.7.2"
   leak_tracker:
     dependency: transitive
     description:
@@ -549,6 +661,46 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.10.2"
+  sqflite:
+    dependency: transitive
+    description:
+      name: sqflite
+      sha256: e2297b1da52f127bc7a3da11439985d9b536f75070f3325e62ada69a5c585d03
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.4.2"
+  sqflite_android:
+    dependency: transitive
+    description:
+      name: sqflite_android
+      sha256: ecd684501ebc2ae9a83536e8b15731642b9570dc8623e0073d227d0ee2bfea88
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.4.2+2"
+  sqflite_common:
+    dependency: transitive
+    description:
+      name: sqflite_common
+      sha256: "6ef422a4525ecc601db6c0a2233ff448c731307906e92cabc9ba292afaae16a6"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.5.6"
+  sqflite_darwin:
+    dependency: transitive
+    description:
+      name: sqflite_darwin
+      sha256: "279832e5cde3fe99e8571879498c9211f3ca6391b0d818df4e17d9fff5c6ccb3"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.4.2"
+  sqflite_platform_interface:
+    dependency: transitive
+    description:
+      name: sqflite_platform_interface
+      sha256: "8dd4515c7bdcae0a785b0062859336de775e8c65db81ae33dd5445f35be61920"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.4.0"
   stack_trace:
     dependency: transitive
     description:
@@ -573,6 +725,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.1"
+  synchronized:
+    dependency: transitive
+    description:
+      name: synchronized
+      sha256: c254ade258ec8282947a0acbbc90b9575b4f19673533ee46f2f6e9b3aeefd7c0
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.4.0"
   term_glyph:
     dependency: transitive
     description:

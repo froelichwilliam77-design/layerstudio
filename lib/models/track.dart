@@ -31,6 +31,9 @@ class Track {
     this.rootMidi = 36,
     this.recordArmed = false,
     this.recordedFilePath,
+    this.cue = false,
+    this.overdub = false,
+    this.latencyMs = 0,
   })  : notes = notes ?? <NoteEvent>[],
         fx = fx ?? FxSettings();
 
@@ -60,6 +63,15 @@ class Track {
   /// Absolute path to last mic take (WAV), if any.
   String? recordedFilePath;
 
+  /// Pre-fade listen: when project cue mode is on, only cued tracks play.
+  bool cue;
+
+  /// Mic: mix the new take with the existing WAV instead of replacing it.
+  bool overdub;
+
+  /// Mic latency compensation in milliseconds (positive = shift take earlier).
+  int latencyMs;
+
   TrackInstrumentMode get effectiveMode {
     if (instrumentMode != null) return instrumentMode!;
     return switch (category) {
@@ -83,6 +95,9 @@ class Track {
     bool? recordArmed,
     String? recordedFilePath,
     int? colorValue,
+    bool? cue,
+    bool? overdub,
+    int? latencyMs,
   }) {
     return Track(
       id: id,
@@ -101,6 +116,9 @@ class Track {
       instrumentMode: instrumentMode ?? this.instrumentMode,
       recordArmed: recordArmed ?? this.recordArmed,
       recordedFilePath: recordedFilePath ?? this.recordedFilePath,
+      cue: cue ?? this.cue,
+      overdub: overdub ?? this.overdub,
+      latencyMs: latencyMs ?? this.latencyMs,
     );
   }
 
@@ -121,6 +139,9 @@ class Track {
         'instrumentMode': instrumentMode?.name,
         'recordArmed': recordArmed,
         'recordedFilePath': recordedFilePath,
+        'cue': cue,
+        'overdub': overdub,
+        'latencyMs': latencyMs,
       };
 
   factory Track.fromJson(Map<String, dynamic> json) => Track(
@@ -152,6 +173,9 @@ class Track {
             : null,
         recordArmed: (json['recordArmed'] as bool?) ?? false,
         recordedFilePath: json['recordedFilePath'] as String?,
+        cue: (json['cue'] as bool?) ?? false,
+        overdub: (json['overdub'] as bool?) ?? false,
+        latencyMs: (json['latencyMs'] as int?) ?? 0,
       );
 }
 

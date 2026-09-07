@@ -103,8 +103,10 @@ class _MiniAmpPanelState extends State<MiniAmpPanel> {
                         activeThumbColor: accent,
                         activeTrackColor: accent.withValues(alpha: 0.45),
                         onChanged: (v) {
+                          c.beginGestureUndo();
                           fx.cabSim = v;
                           c.updateTrackFx(widget.track);
+                          c.endGestureUndo('Cab sim');
                         },
                       ),
                       Text(
@@ -151,7 +153,11 @@ class _MiniAmpPanelState extends State<MiniAmpPanel> {
               min: 0,
               max: 1,
               value: value.clamp(0.0, 1.0),
+              onChangeStart: (_) =>
+                  context.read<StudioController>().beginGestureUndo(),
               onChanged: onChanged,
+              onChangeEnd: (_) =>
+                  context.read<StudioController>().endGestureUndo('Amp'),
             ),
           ),
         ),

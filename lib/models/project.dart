@@ -18,6 +18,8 @@ class StudioProject {
     this.metronomeEnabled = false,
     this.countInBars = 0,
     this.songMode = false,
+    this.cueMode = false,
+    this.latencyCompensationMs = 0,
     this.activePatternIndex = 0,
     List<Track>? tracks,
     List<Pattern>? patterns,
@@ -58,6 +60,12 @@ class StudioProject {
 
   /// When true, transport follows [arrangement] clips; else loops active pattern.
   bool songMode;
+
+  /// Headphone-style PFL: only tracks with [Track.cue] are audible.
+  bool cueMode;
+
+  /// Default mic latency compensation (ms) when a track has no override.
+  int latencyCompensationMs;
 
   int activePatternIndex;
   List<Track> tracks;
@@ -105,6 +113,8 @@ class StudioProject {
         'metronomeEnabled': metronomeEnabled,
         'countInBars': countInBars,
         'songMode': songMode,
+        'cueMode': cueMode,
+        'latencyCompensationMs': latencyCompensationMs,
         'activePatternIndex': activePatternIndex,
         'tracks': tracks.map((t) => t.toJson()).toList(),
         'patterns': patterns.map((p) => p.toJson()).toList(),
@@ -149,6 +159,8 @@ class StudioProject {
         metronomeEnabled: (json['metronomeEnabled'] as bool?) ?? false,
         countInBars: (json['countInBars'] as int?) ?? 0,
         songMode: (json['songMode'] as bool?) ?? false,
+        cueMode: (json['cueMode'] as bool?) ?? false,
+        latencyCompensationMs: (json['latencyCompensationMs'] as int?) ?? 0,
         activePatternIndex: (json['activePatternIndex'] as int?) ?? 0,
         tracks: tracks,
         patterns: patterns,
@@ -178,6 +190,8 @@ class StudioProject {
       metronomeEnabled: (json['metronomeEnabled'] as bool?) ?? false,
       countInBars: (json['countInBars'] as int?) ?? 0,
       songMode: (json['songMode'] as bool?) ?? false,
+      cueMode: (json['cueMode'] as bool?) ?? false,
+      latencyCompensationMs: (json['latencyCompensationMs'] as int?) ?? 0,
       activePatternIndex: (json['activePatternIndex'] as int?) ?? 0,
       tracks: ((json['tracks'] as List?) ?? [])
           .map((e) => Track.fromJson(e as Map<String, dynamic>))

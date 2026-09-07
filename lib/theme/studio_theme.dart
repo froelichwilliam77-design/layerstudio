@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/track.dart';
 
@@ -25,12 +26,12 @@ class StudioColors {
   static const micGreen = Color(0xFF66BB6A);
 
   static Color forCategory(TrackCategory cat) => switch (cat) {
-        TrackCategory.drums => drumsCopper,
-        TrackCategory.bass => bassCyan,
-        TrackCategory.guitar => guitarViolet,
-        TrackCategory.keys => keysGreen,
-        TrackCategory.mic => micGreen,
-      };
+    TrackCategory.drums => drumsCopper,
+    TrackCategory.bass => bassCyan,
+    TrackCategory.guitar => guitarViolet,
+    TrackCategory.keys => keysGreen,
+    TrackCategory.mic => micGreen,
+  };
 
   static Color forTrack(Track track) => Color(track.colorValue);
 
@@ -56,6 +57,14 @@ ThemeData buildStudioTheme() {
       elevation: 0,
       centerTitle: false,
       toolbarHeight: 48,
+      systemOverlayStyle: SystemUiOverlayStyle.light,
+    ),
+    navigationBarTheme: const NavigationBarThemeData(
+      backgroundColor: StudioColors.surface,
+      indicatorColor: Color(0x405B8CFF),
+      labelTextStyle: WidgetStatePropertyAll(
+        TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+      ),
     ),
     cardTheme: CardThemeData(
       color: StudioColors.surface,
