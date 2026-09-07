@@ -250,6 +250,7 @@ class _ArchiveSearchScreenState extends State<ArchiveSearchScreen> {
             ),
             const Spacer(),
             FilledButton.icon(
+              key: const Key('archive-search-button'),
               onPressed: _search,
               icon: const Icon(Icons.arrow_forward_rounded, size: 18),
               label: const Text('Search'),

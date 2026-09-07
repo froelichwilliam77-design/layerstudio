@@ -13,7 +13,7 @@ void main() {
 
     await tester.tap(find.text('Removed only'));
     await tester.pump();
-    await tester.tap(find.byType(FilledButton));
+    await tester.tap(find.byKey(const Key('archive-search-button')));
     await tester.pump();
 
     expect(find.text('1 matching records'), findsOneWidget);
