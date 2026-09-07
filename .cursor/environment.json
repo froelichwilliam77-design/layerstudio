@@ -1,0 +1,4 @@
+{
+  "name": "LayerStudio (Flutter + Android)",
+  "install": "bash .cursor/setup.sh"
+}
