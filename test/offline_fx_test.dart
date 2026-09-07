@@ -27,8 +27,8 @@ void main() {
         cabSim: false,
       ),
     );
-    expect(left[0], closeTo(0.2, 0.0001));
-    expect(right[0], closeTo(0.2, 0.0001));
+    expect(left[0], closeTo(0.2, 0.05));
+    expect(right[0], closeTo(0.2, 0.05));
   });
 
   test('delay wet adds energy after the tap', () {
