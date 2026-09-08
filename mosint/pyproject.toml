@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mosint"
+version = "1.0.0"
+description = "All-in-one automated email OSINT framework"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "LayerStudio" }]
+dependencies = [
+  "dnspython>=2.6",
+  "httpx>=0.27",
+  "pyyaml>=6.0",
+  "rich>=13.7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+mosint = "mosint.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["mosint*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"

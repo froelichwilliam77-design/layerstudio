@@ -168,8 +168,11 @@ python3 tool/generate_samples.py
 lib/ models/ data/ services/ screens/ widgets/ theme/ utils/
 assets/samples/   # drums (stereo, 12 kits) / bass / guitar / keys (stereo multi-root)
 tool/generate_samples.py
+mosint/           # Python email OSINT CLI (MX, WHOIS, HIBP, DeHashed, social)
 PRIVACY.md  STORE.md
 ```
+
+Standalone email OSINT (not part of the mobile DAW): see [`mosint/README.md`](mosint/README.md).
 
 ## License
 

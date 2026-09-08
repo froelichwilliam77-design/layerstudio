@@ -1,0 +1,12 @@
+# Copy to ~/.mosint.yaml and fill in keys you actually have.
+# Mosint still runs without this file; paid/authenticated
+# modules are skipped until a key is present.
+
+services:
+  haveibeenpwned_api_key: ""
+  dehashed_api_key: ""
+  hunter_api_key: ""
+
+settings:
+  timeout_seconds: 12
+  dehashed_max_results: 25

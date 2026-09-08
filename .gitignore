@@ -52,6 +52,15 @@ app.*.map.json
 # FVM
 .fvm/
 
+# Python / Mosint
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+mosint/.venv/
+*.egg-info/
+.mosint.yaml
+
 # Local tooling
 *.zip
 
