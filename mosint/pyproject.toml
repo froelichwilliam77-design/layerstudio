@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mosint"
+version = "0.1.0"
+description = "An all-in-one automated email OSINT framework (authorized use only)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "LayerStudio contributors" }]
+keywords = ["osint", "email", "security", "reconnaissance", "breaches"]
+dependencies = [
+    "requests>=2.31,<3",
+    "dnspython>=2.4,<3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4"]
+
+[project.scripts]
+mosint = "mosint.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/froelichwilliam77-design/layerstudio"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["mosint*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

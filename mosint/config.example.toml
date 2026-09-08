@@ -1,0 +1,26 @@
+# Mosint configuration example.
+#
+# Copy this file to "config.toml" (or point --config at it) and fill in the
+# API keys for the services you are authorised to use. Every key is optional:
+# a module is simply skipped when its required credentials are missing.
+#
+# Values may also be supplied through environment variables, which take
+# precedence over this file:
+#   MOSINT_HIBP_API_KEY
+#   MOSINT_DEHASHED_EMAIL
+#   MOSINT_DEHASHED_API_KEY
+#   MOSINT_TIMEOUT
+#   MOSINT_USER_AGENT
+
+[api_keys]
+# Have I Been Pwned (https://haveibeenpwned.com/API/Key) - paid API key.
+hibp = ""
+
+# DeHashed (https://dehashed.com) - account email + API key.
+dehashed_email = ""
+dehashed_key = ""
+
+[http]
+# Per-request timeout in seconds.
+timeout = 15
+user_agent = "mosint/0.1 (+authorized-osint)"
